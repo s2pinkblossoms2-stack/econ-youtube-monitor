@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# bkit 실행 기록 (자동 생성, 커밋하지 않음)
+.bkit/
