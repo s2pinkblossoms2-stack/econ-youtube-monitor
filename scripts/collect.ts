@@ -3,7 +3,7 @@
 // 자막 수집과 14일 지난 영상 삭제는 PLAN 4번에서 붙인다.
 
 import { getDb } from "../lib/db/client";
-import { fetchChannelFeed } from "../lib/youtube/rss";
+import { fetchRecentUploads } from "../lib/youtube/uploads";
 import { MAIN_CHANNELS } from "./main-channels";
 
 const RETENTION_DAYS = 14;
@@ -36,8 +36,7 @@ async function collectVideoLists(): Promise<void> {
 
   for (const channel of channels ?? []) {
     try {
-      const feed = await fetchChannelFeed(channel.youtube_channel_id);
-      const recent = feed.filter((video) => new Date(video.publishedAt).getTime() >= cutoff);
+      const recent = await fetchRecentUploads(channel.youtube_channel_id, new Date(cutoff));
 
       if (recent.length > 0) {
         const { data: inserted, error: insertError } = await db

@@ -54,7 +54,7 @@ PLAN.md에서 가져온 핵심 맥락이다. 구현할 때마다 이 표로 돌�
 ```
 [수집 스크립트: 담당자 PC에서 실행]            [Vercel: Next.js]
  24개 채널·키워드 목록 읽기                      검색창 / 결과 화면
-   → 채널 RSS로 새 영상 찾기                      ↓
+   → 유튜브 API로 새 영상 찾기                    ↓
    → 영상별 자막 수집                         /api/search
    → 중소 유튜버 검색·거르기                      ↓
    → 14일 지난 영상 삭제                      저장소에서 자막 읽기 → 키워드 찾기
@@ -244,7 +244,7 @@ keywords  (독립)
 | `app/api/keywords/route.ts`, `[id]/route.ts` | 키워드 API |
 | `lib/db/client.ts`, `lib/db/*.ts` | 저장소 연결과 읽기·쓰기 |
 | `lib/search/normalize.ts`, `find-mentions.ts` | 띄어쓰기 제거와 언급 찾기·자르기 |
-| `lib/youtube/rss.ts`, `transcript.ts`, `discover.ts` | 영상 목록·자막 가져오기·중소 유튜버 찾기 (수집 스크립트만 사용) |
+| `lib/youtube/uploads.ts`, `transcript.ts`, `discover.ts` | 영상 목록·자막 가져오기·중소 유튜버 찾기 (수집 스크립트만 사용) |
 | `scripts/collect.ts` | 수집 실행 (`npm run collect`) |
 | `types/*.ts` | 공통 타입 |
 
