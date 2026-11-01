@@ -8,13 +8,17 @@ import { buildVideoMentions, type Excerpt } from "./excerpts";
 import { thumbnailUrl, videoUrl } from "./links";
 import { findMetadataMatch } from "./metadata";
 import { normalizeText } from "./normalize";
-import { PAGE_SIZE } from "./validate";
+import { EXPORT_PART_SIZE, PAGE_SIZE } from "./validate";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 // 마지막 수집이 이 시간보다 오래됐으면 "확인하지 못한 채널"로 안내한다.
 const STALE_CHECK_MS = 2 * DAY_MS;
 
 export type SearchResultItem = {
+  /** 유튜브 영상 ID (11자). 붙여넣은 스크립트로 시점 링크를 만들 때 쓴다. */
+  videoId: string;
+  /** main: 24개 채널 자막 확인 / unverified: 24개 채널인데 자막을 못 받음 / small: 그 밖의 채널 */
+  section: "main" | "unverified" | "small";
   channelName: string;
   videoTitle: string;
   uploadedAt: string;
@@ -95,10 +99,16 @@ export async function searchMentions(
       return row ? [row] : [];
     });
 
+  const [main, unverified, small] = await Promise.all([
+    toItemsComplete(db, pick(mainPage), segmentsById, keywords),
+    toItemsComplete(db, pick(unverifiedPage), segmentsById, keywords),
+    toItemsComplete(db, pick(smallPage), segmentsById, keywords),
+  ]);
+
   return {
-    main: toItems(pick(mainPage), segmentsById, keywords),
-    unverified: toItems(pick(unverifiedPage), segmentsById, keywords),
-    small: toItems(pick(smallPage), segmentsById, keywords),
+    main,
+    unverified,
+    small,
     totalMain: mainAll.length,
     totalUnverified: unverifiedAll.length,
     totalSmall: smallAll.length,
@@ -152,17 +162,76 @@ async function loadVideos(db: SupabaseClient, ids: number[]): Promise<VideoRow[]
   return (data ?? []) as unknown as VideoRow[];
 }
 
-async function loadSegments(db: SupabaseClient, videoIds: number[]): Promise<Map<number, TranscriptSegment[]>> {
+async function loadSegments(
+  db: SupabaseClient,
+  videoIds: number[],
+  concurrency = Infinity,
+): Promise<Map<number, TranscriptSegment[]>> {
   const map = new Map<number, TranscriptSegment[]>();
-  // 한 쪽은 최대 40개 영상이다. 한 줄이 커서 한꺼번에 읽으면 느리므로 영상마다 따로, 동시에 읽는다.
-  await Promise.all(
-    videoIds.map(async (videoId) => {
-      const { data, error } = await db.from("transcripts").select("segments").eq("video_id", videoId).maybeSingle();
-      if (error) throw new Error(`자막 읽기 실패: ${error.message}`);
-      if (data) map.set(videoId, (data as { segments: TranscriptSegment[] }).segments);
-    }),
-  );
+  // 한 줄이 커서 한꺼번에 읽으면 느리므로 영상마다 따로, 동시에 읽는다. (한 쪽은 최대 60개. 내려받기는 concurrency로 나눠서 읽는다)
+  for (let i = 0; i < videoIds.length; i += Math.min(concurrency, videoIds.length || 1)) {
+    const group = videoIds.slice(i, i + Math.min(concurrency, videoIds.length));
+    await Promise.all(
+      group.map(async (videoId) => {
+        const { data, error } = await db.from("transcripts").select("segments").eq("video_id", videoId).maybeSingle();
+        if (error) throw new Error(`자막 읽기 실패: ${error.message}`);
+        if (data) map.set(videoId, (data as { segments: TranscriptSegment[] }).segments);
+      }),
+    );
+  }
   return map;
+}
+
+
+export type ExportResult = {
+  items: SearchResultItem[];
+  part: number;
+  partCount: number;
+  total: number;
+  totalMain: number;
+  totalUnverified: number;
+  totalSmall: number;
+};
+
+/**
+ * 검색 결과 전체를 300개씩 나눈 `part`번째 묶음을 만든다. 순서는 화면과 같다:
+ * 24개 주요 채널(자막 확인) → 확인불가 → 그 밖의 채널, 각각 최신 업로드 순.
+ */
+export async function exportMentions(db: SupabaseClient, keywords: string[], part: number): Promise<ExportResult> {
+  const cutoff = new Date(Date.now() - RETENTION_DAYS * DAY_MS).toISOString();
+  const matches = await findMatchedVideos(db, keywords, cutoff);
+  matches.sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
+  const mainAll = matches.filter((match) => match.kind === "main" && match.captionStatus === "ok");
+  const unverifiedAll = matches.filter((match) => match.kind === "main" && match.captionStatus !== "ok");
+  const smallAll = matches.filter((match) => match.kind === "small");
+
+  const ordered = [...mainAll, ...unverifiedAll, ...smallAll];
+  const partCount = Math.max(1, Math.ceil(ordered.length / EXPORT_PART_SIZE));
+  const slice = ordered.slice((part - 1) * EXPORT_PART_SIZE, part * EXPORT_PART_SIZE);
+
+  // 한 번에 읽는 영상 정보는 100개씩, 자막 원본은 30개씩 동시에 읽는다.
+  const rows: VideoRow[] = [];
+  for (let i = 0; i < slice.length; i += 100) rows.push(...(await loadVideos(db, slice.slice(i, i + 100).map((match) => match.id))));
+  const segmentsById = await loadSegments(
+    db,
+    slice.filter((match) => match.captionStatus === "ok").map((match) => match.id),
+    30,
+  );
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const videos = slice.flatMap((match) => {
+    const row = byId.get(match.id);
+    return row ? [row] : [];
+  });
+
+  return {
+    items: await toItemsComplete(db, videos, segmentsById, keywords),
+    part,
+    partCount,
+    total: ordered.length,
+    totalMain: mainAll.length,
+    totalUnverified: unverifiedAll.length,
+    totalSmall: smallAll.length,
+  };
 }
 
 // 영상마다 결과를 만든다. 자막에서 찾았으면 언급 구절을, 못 찾았으면 제목·태그·설명에서 찾은 결과를 붙인다.
@@ -171,11 +240,15 @@ function toItems(
   videos: VideoRow[],
   segmentsById: Map<number, TranscriptSegment[]>,
   keywords: string[],
+  /** 화면용 설명은 앞 2,000자만 저장해서, 그 뒤에 있는 키워드는 검색용 글(meta_text)로 한 번 더 확인한다 */
+  fallbackMeta?: Map<number, string>,
 ): SearchResultItem[] {
   const items: SearchResultItem[] = [];
   for (const video of videos) {
     try {
       const base = {
+        videoId: video.youtube_video_id,
+        section: (video.channels.kind === "small" ? "small" : video.caption_status === "ok" ? "main" : "unverified") as SearchResultItem["section"],
         channelName: video.channels.name,
         videoTitle: video.title,
         uploadedAt: video.uploaded_at,
@@ -199,7 +272,16 @@ function toItems(
         continue;
       }
 
-      const metadata = findMetadataMatch({ title: video.title, tags: video.tags ?? [], description: video.description }, keywords);
+      let metadata = findMetadataMatch({ title: video.title, tags: video.tags ?? [], description: video.description }, keywords);
+      if (!metadata && fallbackMeta?.has(video.id)) {
+        // 제목·태그·저장된 설명 앞부분에는 없고, 설명의 뒷부분에만 키워드가 있는 경우
+        const metaText = fallbackMeta.get(video.id) ?? "";
+        const matchedKeywords = keywords.filter((keyword) => {
+          const needle = normalizeText(keyword);
+          return needle.length > 0 && metaText.includes(needle);
+        });
+        if (matchedKeywords.length > 0) metadata = { matchedKeywords, matchedIn: ["설명"] };
+      }
       if (metadata) {
         items.push({
           ...base,
@@ -216,6 +298,30 @@ function toItems(
     }
   }
   return items;
+}
+
+// 결과를 만든 뒤, 건수에는 세어졌는데 카드가 만들어지지 않은 영상(설명 뒷부분에만 키워드가 있는 영상)을 찾아 채운다.
+async function toItemsComplete(
+  db: SupabaseClient,
+  videos: VideoRow[],
+  segmentsById: Map<number, TranscriptSegment[]>,
+  keywords: string[],
+): Promise<SearchResultItem[]> {
+  const first = toItems(videos, segmentsById, keywords);
+  if (first.length === videos.length) return first;
+
+  const have = new Set(first.map((item) => item.videoId));
+  const missing = videos.filter((video) => !have.has(video.youtube_video_id));
+  const { data, error } = await db.from("videos").select("id, meta_text").in("id", missing.map((video) => video.id));
+  if (error) throw new Error(`영상 검색용 글 읽기 실패: ${error.message}`);
+  const meta = new Map(((data ?? []) as { id: number; meta_text: string | null }[]).map((row) => [row.id, row.meta_text ?? ""]));
+
+  const extra = new Map(toItems(missing, segmentsById, keywords, meta).map((item) => [item.videoId, item]));
+  const firstById = new Map(first.map((item) => [item.videoId, item]));
+  return videos.flatMap((video) => {
+    const item = firstById.get(video.youtube_video_id) ?? extra.get(video.youtube_video_id);
+    return item ? [item] : [];
+  });
 }
 
 // 사용 중인 채널 중 수집 기록이 없거나 오래된 채널. (수집이 멈춘 채널을 "언급 없음"으로 오해하지 않게 알린다)

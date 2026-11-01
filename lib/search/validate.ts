@@ -4,6 +4,8 @@ export const MAX_KEYWORDS = 30;
 export const MAX_KEYWORD_LENGTH = 50;
 export const MAX_PAGE = 50;
 export const PAGE_SIZE = 20;
+/** 내려받기 한 파일에 담는 영상 수. 영상마다 자막 원본을 읽어야 해서 300개씩 나눠 내려받게 한다. */
+export const EXPORT_PART_SIZE = 300;
 // 쉼표로 나누기 전의 전체 길이 상한 (아주 긴 값을 쪼개는 일부터 막는다)
 const MAX_RAW_LENGTH = 2000;
 
@@ -41,6 +43,29 @@ export function parseSearchParams(params: URLSearchParams): ParseResult {
   }
 
   return { ok: true, value: { keywords, page } };
+}
+
+/** 내려받기 묶음 번호의 상한. 300개씩이라 최대 6,000건까지 받을 수 있다. */
+export const MAX_EXPORT_PART = 20;
+
+export type ExportInput = { keywords: string[]; part: number };
+export type ExportParseResult = { ok: true; value: ExportInput } | { ok: false; message: string };
+
+/** `?keywords=금리,환율&part=1`을 검사한다. 키워드 규칙은 검색과 같다. */
+export function parseExportParams(params: URLSearchParams): ExportParseResult {
+  const search = new URLSearchParams();
+  search.set("keywords", params.get("keywords") ?? "");
+  const parsed = parseSearchParams(search);
+  if (!parsed.ok) return parsed;
+
+  const partRaw = params.get("part");
+  let part = 1;
+  if (partRaw !== null) {
+    if (!/^\d{1,2}$/.test(partRaw)) return { ok: false, message: "묶음 번호가 올바르지 않습니다." };
+    part = Number(partRaw);
+    if (part < 1 || part > MAX_EXPORT_PART) return { ok: false, message: `묶음 번호는 1~${MAX_EXPORT_PART}이어야 합니다.` };
+  }
+  return { ok: true, value: { keywords: parsed.value.keywords, part } };
 }
 
 function fail(message: string): ParseResult {

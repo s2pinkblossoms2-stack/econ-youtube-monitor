@@ -1,13 +1,27 @@
 // 검색 결과 한 건(영상 하나). 모든 결과에는 영상 링크가, 모든 언급 구절에는 시점 링크가 붙는다.
 // 공식 홈페이지의 목록처럼 파란 테두리의 작은 분류 표시, 굵은 제목, 오른쪽의 날짜로 구성한다.
 
+import type { ManualResult } from "@/lib/search/paste";
 import type { SearchResultItem } from "@/lib/search/search";
 import { formatSeconds, formatUploadedAt } from "./format";
+import { Highlight } from "./highlight";
+import { PasteBox } from "./paste-box";
 
 const linkClass = "underline decoration-gray-30 underline-offset-2 hover:decoration-primary-60 hover:text-primary-60";
 const tagClass = "rounded border border-gray-30 px-2 py-0.5 text-xs text-gray-70";
 
-export function ResultCard({ item, searchedKeywords }: { item: SearchResultItem; searchedKeywords: string[] }) {
+export function ResultCard({
+  item,
+  searchedKeywords,
+  manual,
+  onManual,
+}: {
+  item: SearchResultItem;
+  searchedKeywords: string[];
+  /** 담당자가 직접 붙여넣은 스크립트로 확인한 결과 */
+  manual?: ManualResult;
+  onManual?: (videoId: string, result: ManualResult | null) => void;
+}) {
   return (
     <li className="rounded-xl border border-gray-20 bg-white p-5">
       <div className="flex flex-wrap items-center gap-2">
@@ -68,26 +82,17 @@ export function ResultCard({ item, searchedKeywords }: { item: SearchResultItem;
           </a>
         </p>
       )}
+
+      {/* 자막을 받지 못한 영상은 담당자가 스크립트를 직접 붙여넣어 확인할 수 있다 */}
+      {item.captionStatus === "none" && onManual && (
+        <PasteBox
+          videoId={item.videoId}
+          keywords={searchedKeywords}
+          result={manual}
+          onResult={(result) => onManual(item.videoId, result)}
+        />
+      )}
     </li>
   );
 }
 
-// 입력한 키워드를 구절 안에서 표시한다. 글자를 쪼개 <mark>로 감쌀 뿐이고 HTML로 해석하지 않는다.
-function Highlight({ text, keywords }: { text: string; keywords: string[] }) {
-  const escaped = keywords.filter((keyword) => keyword.length > 0).map((keyword) => keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-  if (escaped.length === 0) return <>{text}</>;
-  const parts = text.split(new RegExp(`(${escaped.join("|")})`, "gi"));
-  return (
-    <>
-      {parts.map((part, index) =>
-        index % 2 === 1 ? (
-          <mark key={index} className="rounded bg-yellow-200 px-0.5 text-inherit">
-            {part}
-          </mark>
-        ) : (
-          part
-        ),
-      )}
-    </>
-  );
-}

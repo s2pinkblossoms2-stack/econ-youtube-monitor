@@ -3,9 +3,11 @@
 // 검색창, 등록한 키워드, 결과 화면. 서버의 /api/search만 부르고, 유튜브나 저장소에는 직접 접속하지 않는다.
 
 import { useRef, useState, type FormEvent } from "react";
-import { Search } from "lucide-react";
+import { Download, Search } from "lucide-react";
+import { exportFileName, formatExport } from "@/lib/search/export-text";
+import type { ManualResult } from "@/lib/search/paste";
 import type { SearchResponse, SearchResultItem } from "@/lib/search/search";
-import { MAX_KEYWORDS, MAX_PAGE, PAGE_SIZE } from "@/lib/search/validate";
+import { EXPORT_PART_SIZE, MAX_KEYWORDS, MAX_PAGE, PAGE_SIZE } from "@/lib/search/validate";
 import { ResultCard } from "./result-card";
 import { SavedKeywords } from "./saved-keywords";
 
@@ -20,9 +22,29 @@ export function SearchPanel() {
   const [state, setState] = useState<SearchState>({ status: "idle" });
   // 늦게 도착한 이전 요청이 새 결과를 덮어쓰지 않게 요청 번호를 기억한다.
   const requestId = useRef(0);
+  // 담당자가 스크립트를 직접 붙여넣어 확인한 결과(영상 ID별). 키워드가 바뀌면 지운다.
+  const [manual, setManual] = useState<Record<string, ManualResult>>({});
+  const lastKeywordsKey = useRef("");
+
+  function setManualResult(videoId: string, result: ManualResult | null) {
+    setManual((previous) => {
+      const next = { ...previous };
+      if (result) next[videoId] = result;
+      else delete next[videoId];
+      return next;
+    });
+  }
 
   async function run(keywordText: string, page: number) {
     const id = ++requestId.current;
+    const key = splitKeywords(keywordText)
+      .map((keyword) => keyword.replace(/\s+/g, "").toLowerCase())
+      .sort()
+      .join("|");
+    if (key !== lastKeywordsKey.current) {
+      lastKeywordsKey.current = key;
+      setManual({});
+    }
     setState({ status: "loading" });
     try {
       const response = await fetch(`/api/search?keywords=${encodeURIComponent(keywordText)}&page=${page}`);
@@ -104,14 +126,32 @@ export function SearchPanel() {
           </p>
         )}
         {state.status === "done" && (
-          <Results keywords={state.keywords} data={state.data} onPage={(page) => void run(state.keywords.join(","), page)} />
+          <Results
+            keywords={state.keywords}
+            data={state.data}
+            manual={manual}
+            onManual={setManualResult}
+            onPage={(page) => void run(state.keywords.join(","), page)}
+          />
         )}
       </div>
     </div>
   );
 }
 
-function Results({ keywords, data, onPage }: { keywords: string[]; data: SearchResponse; onPage: (page: number) => void }) {
+function Results({
+  keywords,
+  data,
+  manual,
+  onManual,
+  onPage,
+}: {
+  keywords: string[];
+  data: SearchResponse;
+  manual: Record<string, ManualResult>;
+  onManual: (videoId: string, result: ManualResult | null) => void;
+  onPage: (page: number) => void;
+}) {
   const rawPages = Math.max(1, Math.ceil(Math.max(data.totalMain, data.totalUnverified, data.totalSmall) / PAGE_SIZE));
   // 서버가 받는 쪽 수에는 상한이 있다. 넘는 결과는 보여줄 수 없으니 안내한다.
   const totalPages = Math.min(rawPages, MAX_PAGE);
@@ -125,6 +165,8 @@ function Results({ keywords, data, onPage }: { keywords: string[]; data: SearchR
         검색한 키워드 <strong className="text-primary-90">{keywordLabel}</strong> · 24개 주요 채널 {data.totalMain}건 · 확인불가 {data.totalUnverified}건 · 그 밖의
         채널 {data.totalSmall}건
       </p>
+
+      {!nothing && <DownloadBar keywords={keywords} data={data} manual={manual} />}
 
       {data.unchecked.length > 0 && (
         <p role="status" className="rounded-xl border border-amber-500/60 bg-amber-500/10 p-4 text-sm">
@@ -140,7 +182,15 @@ function Results({ keywords, data, onPage }: { keywords: string[]; data: SearchR
         </p>
       ) : (
         <>
-          <Section title="24개 주요 채널" total={data.totalMain} items={data.main} keywords={keywords} empty="이 구역에는 언급한 영상이 없습니다." />
+          <Section
+            title="24개 주요 채널"
+            total={data.totalMain}
+            items={data.main}
+            keywords={keywords}
+            empty="이 구역에는 언급한 영상이 없습니다."
+            manual={manual}
+            onManual={onManual}
+          />
           {data.totalUnverified > 0 && (
             <Section
               title="확인불가 · 언급 가능성 높음"
@@ -148,7 +198,9 @@ function Results({ keywords, data, onPage }: { keywords: string[]; data: SearchR
               items={data.unverified}
               keywords={keywords}
               empty="이 쪽에는 영상이 없습니다."
-              note="자막을 받지 못한 24개 채널 영상입니다. 영상에서 한 말은 확인하지 못했고, 제목·태그·설명에 키워드가 있어 언급했을 가능성이 높은 영상이니 링크로 직접 확인해 주세요."
+              note="자막을 받지 못한 24개 채널 영상입니다. 영상에서 한 말은 확인하지 못했고, 제목·태그·설명에 키워드가 있어 언급했을 가능성이 높은 영상입니다. 링크로 직접 확인하시거나, 유튜브에서 스크립트를 복사해 아래 칸에 붙여넣으면 키워드를 찾아 드립니다."
+              manual={manual}
+              onManual={onManual}
             />
           )}
           <Section
@@ -160,8 +212,10 @@ function Results({ keywords, data, onPage }: { keywords: string[]; data: SearchR
             note={
               data.pendingKeywords.length > 0
                 ? `"${data.pendingKeywords.join(", ")}"은(는) 아직 유튜브 검색을 거치지 않아, 그 밖의 채널 결과는 다음 수집 후에 나옵니다.`
-                : "제목·태그·설명에서 키워드를 찾은 영상입니다. 자막은 확인하지 않았습니다."
+                : "제목·태그·설명에서 키워드를 찾은 영상입니다. 자막은 확인하지 않았습니다. 스크립트를 복사해 붙여넣으면 영상 속 언급까지 확인할 수 있습니다."
             }
+            manual={manual}
+            onManual={onManual}
           />
           {truncated && (
             <p role="status" className="text-sm text-gray-70">
@@ -197,6 +251,81 @@ function Results({ keywords, data, onPage }: { keywords: string[]; data: SearchR
   );
 }
 
+// 결과 내려받기: ① 지금 화면에 보이는 결과(직접 붙여넣어 확인한 것 포함)를 바로 받기 ② 서버에서 전체 결과를 300건씩 받기
+function DownloadBar({ keywords, data, manual }: { keywords: string[]; data: SearchResponse; manual: Record<string, ManualResult> }) {
+  const total = data.totalMain + data.totalUnverified + data.totalSmall;
+  const parts = Math.max(1, Math.ceil(total / EXPORT_PART_SIZE));
+  const manualCount = Object.keys(manual).length;
+
+  function downloadScreen() {
+    const generatedAt = new Date();
+    const items = [...data.main, ...data.unverified, ...data.small];
+    const text = formatExport(
+      items.map((item) => ({ item, manual: manual[item.videoId] })),
+      { keywords, generatedAt, totals: { main: data.totalMain, unverified: data.totalUnverified, small: data.totalSmall } },
+    );
+    // 윈도우 메모장에서도 한글이 깨지지 않게 파일 맨 앞에 BOM을 붙인다.
+    const blob = new Blob(["﻿", text], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = exportFileName(keywords, generatedAt);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  const keywordParam = encodeURIComponent(keywords.join(","));
+
+  return (
+    <section aria-label="결과 내려받기" className="rounded-xl border border-primary-20 bg-primary-5 p-4 sm:p-5">
+      <h2 className="mb-2 flex items-center gap-2 text-lg font-bold text-primary-90">
+        <Download className="h-5 w-5" />
+        결과를 txt 파일로 내려받기
+      </h2>
+      <p className="mb-3 text-sm text-gray-70">
+        링크, 영상 제목, 채널명, 게시 날짜, 언급한 시간대와 내용(자막 원문 구절)이 들어갑니다. 내용은 요약이 아니라 자막 원문입니다.
+      </p>
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={downloadScreen}
+          className="flex items-center gap-2 rounded-lg bg-primary-60 px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-70"
+        >
+          <Download className="h-4 w-4" />
+          지금 화면의 결과 받기
+        </button>
+        {manualCount > 0 && <span className="text-xs text-primary-70">직접 붙여넣어 확인한 {manualCount}건 포함</span>}
+      </div>
+
+      <div className="mt-4 border-t border-primary-20 pt-3">
+        <p className="mb-2 text-sm font-medium text-primary-90">
+          전체 결과 받기 (총 {total.toLocaleString("ko-KR")}건, {EXPORT_PART_SIZE}건씩 나눠서 · 파일을 만드는 데 20~30초 걸릴 수 있습니다)
+        </p>
+        <ul className="flex flex-wrap gap-2">
+          {Array.from({ length: Math.min(parts, 20) }, (_, index) => index + 1).map((number) => {
+            const from = (number - 1) * EXPORT_PART_SIZE + 1;
+            const to = Math.min(number * EXPORT_PART_SIZE, total);
+            return (
+              <li key={number}>
+                <a
+                  href={`/api/export?keywords=${keywordParam}&part=${number}`}
+                  download
+                  className="inline-block rounded-lg border border-primary-60 bg-white px-3 py-1.5 text-sm font-medium text-primary-60 hover:bg-primary-10"
+                >
+                  {from.toLocaleString("ko-KR")}~{to.toLocaleString("ko-KR")}번째
+                </a>
+              </li>
+            );
+          })}
+        </ul>
+        <p className="mt-2 text-xs text-gray-50">전체 결과 파일에는 직접 붙여넣어 확인한 내용이 들어가지 않습니다. 그 내용까지 받으려면 위의 &ldquo;지금 화면의 결과 받기&rdquo;를 쓰세요.</p>
+      </div>
+    </section>
+  );
+}
+
 function Section(props: {
   title: string;
   total: number;
@@ -204,6 +333,8 @@ function Section(props: {
   keywords: string[];
   empty: string;
   note?: string;
+  manual: Record<string, ManualResult>;
+  onManual: (videoId: string, result: ManualResult | null) => void;
 }) {
   return (
     <section>
@@ -216,7 +347,13 @@ function Section(props: {
       ) : (
         <ul className="space-y-3">
           {props.items.map((item) => (
-            <ResultCard key={item.videoUrl} item={item} searchedKeywords={props.keywords} />
+            <ResultCard
+              key={item.videoUrl}
+              item={item}
+              searchedKeywords={props.keywords}
+              manual={props.manual[item.videoId]}
+              onManual={props.onManual}
+            />
           ))}
         </ul>
       )}
