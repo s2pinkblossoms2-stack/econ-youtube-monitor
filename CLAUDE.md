@@ -10,7 +10,8 @@
 - Next.js 16 (App Router), React 19, TypeScript(strict), Tailwind CSS 4, ESLint
 - 화면과 서버 쪽 코드(API)를 한 프로젝트에서 처리한다. 다른 프레임워크는 제안하지 않는다.
 - 배포는 Vercel.
-- 저장소 종류와 자막 가져오는 방법은 아직 정하지 않았다. 개발 단위 1·2번에서 먼저 확인하고 정한다.
+- 저장소는 Supabase(Postgres)로 정했다. 연결은 `lib/db/client.ts`의 `getDb()`를 쓰고, 접속 정보는 `.env`의 `SUPABASE_URL`, `SUPABASE_SECRET_KEY`(서버 전용)에 있다. 테이블 정의는 `supabase/migrations/`에 둔다.
+- 자막은 `youtube-transcript` 같은 비공식 방식으로 가져올 수 있음을 시험했다. (PLAN.md "1번 시험 결과" 참고) 수집 스크립트 실행 도구는 PLAN 3번에서 정한다.
 
 ## 명령어
 
