@@ -24,7 +24,28 @@ export function ResultCard({ item, searchedKeywords }: { item: SearchResultItem;
           </span>
         ))}
         {item.isShort && <span className="rounded-full border border-foreground/30 px-2 py-0.5 text-xs">쇼츠</span>}
+        {item.matchType === "metadata" && (
+          <span className="rounded-full border border-foreground/30 px-2 py-0.5 text-xs">
+            {item.matchedIn.join("·")}에서 찾음
+          </span>
+        )}
+        {item.captionStatus === "none" && (
+          <span className="rounded-full border border-foreground/30 px-2 py-0.5 text-xs">자막 확인 안 함</span>
+        )}
       </div>
+
+      {item.matchType === "metadata" && (
+        <a href={item.videoUrl} target="_blank" rel="noopener noreferrer" className="mt-3 block w-full max-w-xs">
+          {/* 썸네일 주소는 서버가 영상 ID로 만든 유튜브 주소다. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={item.thumbnailUrl}
+            alt={`${item.videoTitle} 썸네일`}
+            loading="lazy"
+            className="aspect-video w-full rounded-md border border-foreground/15 object-cover"
+          />
+        </a>
+      )}
 
       <ul className="mt-3 space-y-3">
         {item.mentions.map((mention) => (

@@ -110,16 +110,23 @@ function Results({ keywords, data, onPage }: { keywords: string[]; data: SearchR
       {nothing ? (
         <p className="rounded-lg border border-foreground/15 p-4">
           최근 14일 안에 &ldquo;{keywords.join(", ")}&rdquo;을(를) 언급한 영상이 없습니다. (언급 없음)
+          {data.pendingKeywords.length > 0 &&
+            ` 단, "${data.pendingKeywords.join(", ")}"은(는) 아직 유튜브 검색을 거치지 않아 그 밖의 채널은 다음 수집 후에 나옵니다.`}
         </p>
       ) : (
         <>
           <Section title="24개 주요 채널" total={data.totalMain} items={data.main} keywords={keywords} empty="이 구역에는 언급한 영상이 없습니다." />
           <Section
-            title="중소 유튜버 (구독자 5만 명 이상)"
+            title="그 밖의 채널 (제목·태그·설명에서 찾음)"
             total={data.totalSmall}
             items={data.small}
             keywords={keywords}
-            empty="결과가 없습니다. (중소 유튜버 찾기는 아직 준비 중입니다.)"
+            empty="결과가 없습니다."
+            note={
+              data.pendingKeywords.length > 0
+                ? `"${data.pendingKeywords.join(", ")}"은(는) 아직 유튜브 검색을 거치지 않아, 그 밖의 채널 결과는 다음 수집 후에 나옵니다.`
+                : undefined
+            }
           />
           {truncated && (
             <p role="status" className="text-sm text-foreground/70">
@@ -155,12 +162,20 @@ function Results({ keywords, data, onPage }: { keywords: string[]; data: SearchR
   );
 }
 
-function Section(props: { title: string; total: number; items: SearchResultItem[]; keywords: string[]; empty: string }) {
+function Section(props: {
+  title: string;
+  total: number;
+  items: SearchResultItem[];
+  keywords: string[];
+  empty: string;
+  note?: string;
+}) {
   return (
     <section>
       <h2 className="mb-3 text-lg font-bold">
         {props.title} <span className="font-normal text-foreground/70">· {props.total}건</span>
       </h2>
+      {props.note && <p className="mb-3 rounded-lg border border-amber-500/60 bg-amber-500/10 p-3 text-sm">{props.note}</p>}
       {props.items.length === 0 ? (
         <p className="text-foreground/70">{props.empty}</p>
       ) : (

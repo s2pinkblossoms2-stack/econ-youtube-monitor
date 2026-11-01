@@ -3,6 +3,12 @@
 
 const VIDEO_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
 
+/** 영상 썸네일 주소. 저장된 값이 아니라 영상 ID로 조립한다. */
+export function thumbnailUrl(videoId: string): string {
+  if (!VIDEO_ID_PATTERN.test(videoId)) throw new Error("영상 ID 형식이 올바르지 않습니다.");
+  return `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
+}
+
 /** 영상 링크. seconds를 주면 그 시점(초)으로 바로 이동하는 링크가 된다. */
 export function videoUrl(videoId: string, seconds?: number): string {
   if (!VIDEO_ID_PATTERN.test(videoId)) throw new Error("영상 ID 형식이 올바르지 않습니다.");

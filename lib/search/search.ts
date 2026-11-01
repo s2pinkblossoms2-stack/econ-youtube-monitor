@@ -5,7 +5,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { TranscriptSegment } from "../youtube/transcript";
 import { RETENTION_DAYS } from "./constants";
 import { buildVideoMentions, type Excerpt } from "./excerpts";
-import { videoUrl } from "./links";
+import { thumbnailUrl, videoUrl } from "./links";
+import { findMetadataMatch } from "./metadata";
 import { normalizeText } from "./normalize";
 import { PAGE_SIZE } from "./validate";
 
@@ -22,8 +23,14 @@ export type SearchResultItem = {
   videoTitle: string;
   uploadedAt: string;
   videoUrl: string;
+  thumbnailUrl: string;
   isShort: boolean;
-  captionStatus: "ok";
+  /** ok: 자막에서 찾음 / none: 자막을 확인하지 못해 제목·태그·설명에서만 찾음 */
+  captionStatus: "ok" | "none";
+  /** transcript: 자막 언급 구절이 있음 / metadata: 제목·태그·설명에서 찾음 */
+  matchType: "transcript" | "metadata";
+  /** metadata일 때 키워드가 나온 곳 (제목·태그·설명) */
+  matchedIn: string[];
   matchedKeywords: string[];
   mentions: Excerpt[];
   moreMentions: number;
@@ -36,7 +43,7 @@ export type SearchResponse = {
   totalSmall: number;
   page: number;
   unchecked: { channelName: string; reason: string }[];
-  /** 아직 수집을 거치지 않은 키워드. 중소 유튜버 찾기(PLAN 9번)를 만들 때 채운다. */
+  /** 아직 수집(키워드 검색)을 거치지 않은 키워드. 그 밖의 채널 결과는 다음 수집 후에 나온다. */
   pendingKeywords: string[];
 };
 
@@ -46,6 +53,8 @@ type VideoRow = {
   title: string;
   uploaded_at: string;
   is_short: boolean;
+  tags: string[];
+  description: string | null;
   channels: { name: string; kind: "main" | "small"; active: boolean };
 };
 
@@ -57,7 +66,7 @@ export async function searchMentions(
 ): Promise<SearchResponse> {
   const cutoff = new Date(Date.now() - RETENTION_DAYS * DAY_MS).toISOString();
 
-  const matchedIds = await findMatchedVideoIds(db, keywords);
+  const matchedIds = await findMatchedVideoIds(db, keywords, cutoff);
   const videos = await loadVideos(db, [...matchedIds], cutoff);
 
   // 최신 업로드 순. 같은 영상은 한 번만 나온다.
@@ -78,32 +87,66 @@ export async function searchMentions(
     totalSmall: smallAll.length,
     page,
     unchecked: await findUncheckedChannels(db),
-    pendingKeywords: [],
+    pendingKeywords: await findPendingKeywords(db, keywords),
   };
 }
 
-// 검색용 글에 키워드(띄어쓰기를 뺀 글)가 들어 있는 영상을 모두 찾는다. 키워드 중 하나라도 있으면 포함한다.
-async function findMatchedVideoIds(db: SupabaseClient, keywords: string[]): Promise<Set<string>> {
+// 저장된 키워드 중 유튜브 검색 수집을 마친 것을 빼고, 입력한 키워드 중 아직 수집 전인 것을 돌려준다.
+async function findPendingKeywords(db: SupabaseClient, keywords: string[]): Promise<string[]> {
+  const { data, error } = await db.from("keywords").select("text, last_collected_at");
+  if (error) throw new Error(`키워드 읽기 실패: ${error.message}`);
+  const collected = new Set(
+    ((data ?? []) as { text: string; last_collected_at: string | null }[])
+      .filter((row) => row.last_collected_at)
+      .map((row) => normalizeText(row.text)),
+  );
+  return keywords.filter((keyword) => !collected.has(normalizeText(keyword)));
+}
+
+// 자막의 검색용 글, 또는 영상의 제목·태그·설명(meta_text)에 키워드(띄어쓰기를 뺀 글)가 들어 있는 영상을 모두 찾는다.
+// 키워드 중 하나라도 있으면 포함한다.
+async function findMatchedVideoIds(db: SupabaseClient, keywords: string[], cutoff: string): Promise<Set<string>> {
   const perKeyword = await Promise.all(
     keywords.map(async (keyword) => {
       const pattern = `%${escapeLike(normalizeText(keyword))}%`;
-      const ids: string[] = [];
-      for (let from = 0; ; from += PAGE_ROWS) {
-        const { data, error } = await db
-          .from("transcripts")
-          .select("video_id")
-          .ilike("normalized_text", pattern)
-          .order("video_id")
-          .range(from, from + PAGE_ROWS - 1);
-        if (error) throw new Error(`자막 검색 실패: ${error.message}`);
-        const rows = (data ?? []) as { video_id: string }[];
-        ids.push(...rows.map((row) => row.video_id));
-        if (rows.length < PAGE_ROWS) break;
-      }
-      return ids;
+      const [inTranscripts, inMetadata] = await Promise.all([
+        readAllIds(async (from, to) => {
+          const { data, error } = await db
+            .from("transcripts")
+            .select("video_id")
+            .ilike("normalized_text", pattern)
+            .order("video_id")
+            .range(from, to);
+          if (error) throw new Error(`자막 검색 실패: ${error.message}`);
+          return ((data ?? []) as { video_id: string }[]).map((row) => row.video_id);
+        }),
+        readAllIds(async (from, to) => {
+          const { data, error } = await db
+            .from("videos")
+            .select("id")
+            .ilike("meta_text", pattern)
+            .gte("uploaded_at", cutoff)
+            .order("id")
+            .range(from, to);
+          if (error) throw new Error(`제목·태그·설명 검색 실패: ${error.message}`);
+          return ((data ?? []) as { id: string }[]).map((row) => row.id);
+        }),
+      ]);
+      return [...inTranscripts, ...inMetadata];
     }),
   );
   return new Set(perKeyword.flat());
+}
+
+// 한 번에 1,000행까지만 주는 읽기를 끝까지 반복한다.
+async function readAllIds(readPage: (from: number, to: number) => Promise<string[]>): Promise<string[]> {
+  const ids: string[] = [];
+  for (let from = 0; ; from += PAGE_ROWS) {
+    const page = await readPage(from, from + PAGE_ROWS - 1);
+    ids.push(...page);
+    if (page.length < PAGE_ROWS) break;
+  }
+  return ids;
 }
 
 // LIKE에서 특별한 뜻을 가진 \ % _ 를 글자 그대로 찾도록 막는다. (% 하나로 모든 자막이 걸리는 일 방지)
@@ -118,7 +161,7 @@ async function loadVideos(db: SupabaseClient, ids: string[], cutoff: string): Pr
     chunks.map(async (part) => {
       const { data, error } = await db
         .from("videos")
-        .select("id, youtube_video_id, title, uploaded_at, is_short, channels!inner(name, kind, active)")
+        .select("id, youtube_video_id, title, uploaded_at, is_short, tags, description, channels!inner(name, kind, active)")
         .in("id", part)
         .gte("uploaded_at", cutoff)
         .eq("channels.active", true);
@@ -142,7 +185,8 @@ async function loadSegments(db: SupabaseClient, videoIds: string[]): Promise<Map
   return map;
 }
 
-// 영상마다 언급 구절을 붙인다. 링크를 만들 수 없는 영상(잘못된 영상 ID)은 결과에서 뺀다.
+// 영상마다 결과를 만든다. 자막에서 찾았으면 언급 구절을, 못 찾았으면 제목·태그·설명에서 찾은 결과를 붙인다.
+// 링크를 만들 수 없는 영상(잘못된 영상 ID)은 결과에서 뺀다.
 function toItems(
   videos: VideoRow[],
   segmentsById: Map<string, TranscriptSegment[]>,
@@ -150,22 +194,43 @@ function toItems(
 ): SearchResultItem[] {
   const items: SearchResultItem[] = [];
   for (const video of videos) {
-    const segments = segmentsById.get(video.id);
-    if (!segments) continue;
     try {
-      const found = buildVideoMentions(video.youtube_video_id, segments, keywords);
-      if (!found) continue;
-      items.push({
+      const base = {
         channelName: video.channels.name,
         videoTitle: video.title,
         uploadedAt: video.uploaded_at,
         videoUrl: videoUrl(video.youtube_video_id),
+        thumbnailUrl: thumbnailUrl(video.youtube_video_id),
         isShort: video.is_short,
-        captionStatus: "ok",
-        matchedKeywords: found.matchedKeywords,
-        mentions: found.mentions,
-        moreMentions: found.moreMentions,
-      });
+      };
+
+      const segments = segmentsById.get(video.id);
+      const found = segments ? buildVideoMentions(video.youtube_video_id, segments, keywords) : null;
+      if (found) {
+        items.push({
+          ...base,
+          captionStatus: "ok",
+          matchType: "transcript",
+          matchedIn: [],
+          matchedKeywords: found.matchedKeywords,
+          mentions: found.mentions,
+          moreMentions: found.moreMentions,
+        });
+        continue;
+      }
+
+      const metadata = findMetadataMatch({ title: video.title, tags: video.tags ?? [], description: video.description }, keywords);
+      if (metadata) {
+        items.push({
+          ...base,
+          captionStatus: segments ? "ok" : "none",
+          matchType: "metadata",
+          matchedIn: metadata.matchedIn,
+          matchedKeywords: metadata.matchedKeywords,
+          mentions: [],
+          moreMentions: 0,
+        });
+      }
     } catch {
       continue;
     }
@@ -175,7 +240,8 @@ function toItems(
 
 // 사용 중인 채널 중 수집 기록이 없거나 오래된 채널. (수집이 멈춘 채널을 "언급 없음"으로 오해하지 않게 알린다)
 async function findUncheckedChannels(db: SupabaseClient): Promise<SearchResponse["unchecked"]> {
-  const { data, error } = await db.from("channels").select("name, last_checked_at").eq("active", true);
+  // 24개 주요 채널만 본다. 그 밖의 채널은 키워드 검색으로 찾은 영상만 저장하므로 수집 기록이 없는 것이 정상이다.
+  const { data, error } = await db.from("channels").select("name, last_checked_at").eq("kind", "main").eq("active", true);
   if (error) throw new Error(`채널 읽기 실패: ${error.message}`);
   const now = Date.now();
   return ((data ?? []) as { name: string; last_checked_at: string | null }[])
