@@ -121,7 +121,7 @@ keywords  (독립)
 | GET | `/api/search?keywords=금리,환율&page=1` | 키워드 검색. 24개 채널 결과와 중소 유튜버 결과를 나눠 돌려준다. 20건씩. |
 | GET | `/api/channels` | 채널 목록 |
 | POST | `/api/channels` | 채널 추가 (`youtube_channel_id` 또는 채널 주소) |
-| DELETE | `/api/channels/[id]` | 채널 삭제 |
+| PATCH | `/api/channels/[id]` | 채널 끄기·켜기 (`{"active": false}`). 지우지 않고 비활성화만 한다. (담당자 결정) 채널 API는 모두 `.env`의 `ADMIN_PASSWORD`(Basic 인증)로 막는다. |
 | GET | `/api/keywords` | 저장된 키워드 목록 |
 | POST | `/api/keywords` | 키워드 저장 |
 | DELETE | `/api/keywords/[id]` | 키워드 삭제 |
