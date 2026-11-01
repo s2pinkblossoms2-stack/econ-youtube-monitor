@@ -7,7 +7,7 @@ const linkClass = "underline decoration-foreground/30 underline-offset-2 hover:d
 
 export function ResultCard({ item, searchedKeywords }: { item: SearchResultItem; searchedKeywords: string[] }) {
   return (
-    <li className="rounded-lg border border-foreground/15 p-4">
+    <li className="rounded-lg border border-gray-20 bg-white p-4">
       <p className="text-sm text-foreground/70">
         {item.channelName} · {formatUploadedAt(item.uploadedAt)}
       </p>

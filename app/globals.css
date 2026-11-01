@@ -1,25 +1,121 @@
 @import "tailwindcss";
 
+/* 색은 재정경제부 홈페이지(mofe.go.kr)의 색 체계를 따른다: 파랑(primary)·청회색(secondary)·회색(gray) */
 :root {
+  color-scheme: light;
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #1e2124;
+
+  --primary-5: #ecf2fe;
+  --primary-10: #d8e5fd;
+  --primary-20: #b1cefb;
+  --primary-30: #86aff9;
+  --primary-40: #4c87f6;
+  --primary-50: #256ef4;
+  --primary-60: #0b50d0;
+  --primary-70: #083891;
+  --primary-80: #052561;
+  --primary-90: #03163a;
+
+  --secondary-5: #eef2f7;
+  --secondary-10: #d6e0eb;
+  --secondary-20: #bacbde;
+  --secondary-50: #346fb2;
+  --secondary-70: #063a74;
+
+  --gray-5: #f4f5f6;
+  --gray-20: #cdd1d5;
+  --gray-50: #6d7882;
+  --gray-70: #464c53;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-primary-5: var(--primary-5);
+  --color-primary-10: var(--primary-10);
+  --color-primary-20: var(--primary-20);
+  --color-primary-30: var(--primary-30);
+  --color-primary-40: var(--primary-40);
+  --color-primary-50: var(--primary-50);
+  --color-primary-60: var(--primary-60);
+  --color-primary-70: var(--primary-70);
+  --color-primary-80: var(--primary-80);
+  --color-primary-90: var(--primary-90);
+  --color-secondary-5: var(--secondary-5);
+  --color-secondary-10: var(--secondary-10);
+  --color-secondary-20: var(--secondary-20);
+  --color-secondary-50: var(--secondary-50);
+  --color-secondary-70: var(--secondary-70);
+  --color-gray-5: var(--gray-5);
+  --color-gray-20: var(--gray-20);
+  --color-gray-50: var(--gray-50);
+  --color-gray-70: var(--gray-70);
+  --font-sans: var(--font-inter), "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  /* 한글이 또렷한 기본 글꼴 (별도 내려받기 없음) */
-  font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+  font-family: var(--font-inter), "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
+  word-break: keep-all; /* 한글을 단어 단위로 줄바꿈 */
+}
+
+/* 키보드로 이동할 때 현재 위치가 보이게 한다 */
+:focus-visible {
+  outline: 2px solid var(--primary-50);
+  outline-offset: 2px;
+}
+
+/* 화면이 처음 나타날 때 아래에서 위로 떠오르는 효과. 요소는 처음에 inline으로 opacity: 0이고, 애니메이션이 보이게 채운다. */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInOverlay {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeInDialog {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.6s ease-out forwards;
+}
+
+.animate-fade-in-overlay {
+  animation: fadeInOverlay 0.4s ease-out forwards;
+}
+
+.animate-slide-up-overlay {
+  animation: fadeInDialog 0.5s ease-out forwards;
+  transform: translate(-50%, -50%);
+}
+
+/* 움직임을 줄이도록 설정한 사용자에게는 효과 없이 바로 보여준다 */
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in-up,
+  .animate-fade-in-overlay,
+  .animate-slide-up-overlay {
+    animation: none;
+    opacity: 1 !important;
+  }
 }

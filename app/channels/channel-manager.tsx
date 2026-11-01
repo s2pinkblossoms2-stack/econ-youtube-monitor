@@ -125,7 +125,7 @@ export function ChannelManager() {
         <button
           type="submit"
           disabled={busy || channelInput.trim().length === 0 || nameInput.trim().length === 0}
-          className="rounded-lg bg-foreground px-5 py-2 font-medium text-background disabled:opacity-40"
+          className="rounded-lg bg-primary-60 px-5 py-2 font-medium text-white hover:bg-primary-70 disabled:opacity-40"
         >
           {busy ? "처리 중…" : "추가"}
         </button>

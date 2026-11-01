@@ -160,7 +160,7 @@ export function SavedKeywords({ input, onPick }: { input: string; onPick: (keywo
               type="button"
               onClick={() => void saveCurrent()}
               disabled={busy || input.trim().length === 0}
-              className="rounded-lg bg-foreground px-3 py-1.5 text-sm font-medium text-background disabled:opacity-40"
+              className="rounded-lg bg-primary-60 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-70 disabled:opacity-40"
             >
               지금 입력한 키워드 저장
             </button>

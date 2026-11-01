@@ -72,7 +72,7 @@ export function SearchPanel() {
         <button
           type="submit"
           disabled={loading || input.trim().length === 0}
-          className="rounded-lg bg-foreground px-5 py-2.5 text-base font-medium text-background disabled:opacity-40"
+          className="rounded-lg bg-primary-60 px-5 py-2.5 text-base font-medium text-white hover:bg-primary-70 disabled:opacity-40"
         >
           {loading ? "검색 중…" : "검색"}
         </button>
