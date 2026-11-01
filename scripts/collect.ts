@@ -6,9 +6,14 @@ import { RETENTION_DAYS } from "../lib/search/constants";
 import { buildMetaText, findMetadataMatch } from "../lib/search/metadata";
 import { normalizeText } from "../lib/search/normalize";
 import { MAX_KEYWORD_LENGTH, MAX_KEYWORDS } from "../lib/search/validate";
-import { fetchVideoDetails, searchRecentVideoIds, type DiscoveredVideo } from "../lib/youtube/discover";
+import {
+  fetchVideoDetails,
+  searchRecentVideoIds,
+  truncateText,
+  type DiscoveredVideo,
+} from "../lib/youtube/discover";
 import { fetchKoreanTranscript } from "../lib/youtube/transcript";
-import { fetchRecentUploads } from "../lib/youtube/uploads";
+import { fetchRecentUploads, MAX_UPLOADS_PER_CHANNEL } from "../lib/youtube/uploads";
 import { MAIN_CHANNELS } from "./main-channels";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -51,6 +56,9 @@ async function collectVideoLists(): Promise<void> {
   for (const channel of channels ?? []) {
     try {
       const recent = await fetchRecentUploads(channel.youtube_channel_id, new Date(cutoff));
+      if (recent.length >= MAX_UPLOADS_PER_CHANNEL) {
+        console.warn(`${channel.name}: 영상이 ${MAX_UPLOADS_PER_CHANNEL}개를 넘어 2주치를 다 못 가져왔을 수 있습니다.`);
+      }
 
       if (recent.length > 0) {
         const { data: inserted, error: insertError } = await db
@@ -281,7 +289,7 @@ async function saveDiscoveredVideos(videos: DiscoveredVideo[]): Promise<number> 
         uploaded_at: video.publishedAt,
         is_short: video.isShort,
         tags: video.tags,
-        description: video.description.slice(0, MAX_DESCRIPTION_LENGTH),
+        description: truncateText(video.description, MAX_DESCRIPTION_LENGTH),
         meta_text: buildMetaText({ title: video.title, tags: video.tags, description: video.description }),
         caption_status: "none",
         caption_checked_at: now,
@@ -295,6 +303,71 @@ async function saveDiscoveredVideos(videos: DiscoveredVideo[]): Promise<number> 
     .select("id");
   if (error) throw new Error(`영상 저장 실패: ${error.message}`);
   return data?.length ?? 0;
+}
+
+// 제목·태그·설명·쇼츠 여부가 비어 있는 영상(24개 채널 영상)을 유튜브 영상 정보로 채운다. (호출 한 번에 50개, 1단위)
+// 자막을 못 받은 영상도 제목·태그·설명으로 "언급 가능성 높음"을 보여주려면 이 정보가 필요하다.
+// 유튜브가 영상 정보를 주지 않는 영상(삭제·비공개로 바뀐 영상)은 결과에서 빼기 위해 지운다.
+async function fillVideoDetails(): Promise<void> {
+  const db = getDb();
+  type Row = { id: string; youtube_video_id: string; channel_id: string; title: string; uploaded_at: string };
+
+  const targets: Row[] = [];
+  for (let from = 0; ; from += PAGE_ROWS) {
+    const { data, error } = await db
+      .from("videos")
+      .select("id, youtube_video_id, channel_id, title, uploaded_at")
+      .is("meta_text", null)
+      .order("id")
+      .range(from, from + PAGE_ROWS - 1);
+    if (error) throw new Error(`영상 정보 채울 영상 읽기 실패: ${error.message}`);
+    targets.push(...((data ?? []) as Row[]));
+    if ((data?.length ?? 0) < PAGE_ROWS) break;
+  }
+  if (targets.length === 0) return;
+  console.log(`\n제목·태그·설명을 채울 영상: ${targets.length}개`);
+
+  let filled = 0;
+  let removed = 0;
+  for (let i = 0; i < targets.length; i += 50) {
+    const part = targets.slice(i, i + 50);
+    try {
+      const details = new Map((await fetchVideoDetails(part.map((row) => row.youtube_video_id))).map((v) => [v.videoId, v]));
+
+      const rows = part.flatMap((row) => {
+        const video = details.get(row.youtube_video_id);
+        if (!video) return [];
+        return [
+          {
+            youtube_video_id: row.youtube_video_id,
+            channel_id: row.channel_id,
+            title: row.title,
+            uploaded_at: row.uploaded_at,
+            is_short: video.isShort,
+            tags: video.tags,
+            description: truncateText(video.description, MAX_DESCRIPTION_LENGTH),
+            meta_text: buildMetaText({ title: video.title, tags: video.tags, description: video.description }),
+          },
+        ];
+      });
+      if (rows.length > 0) {
+        const { error } = await db.from("videos").upsert(rows, { onConflict: "youtube_video_id" });
+        if (error) throw new Error(error.message);
+        filled += rows.length;
+      }
+
+      const gone = part.filter((row) => !details.has(row.youtube_video_id)).map((row) => row.id);
+      if (gone.length > 0) {
+        const { error } = await db.from("videos").delete().in("id", gone);
+        if (error) throw new Error(error.message);
+        removed += gone.length;
+      }
+    } catch (e) {
+      // 이 묶음은 건너뛰고 다음 실행 때 다시 한다. (실패한 호출로는 영상을 지우지 않는다)
+      console.error(`영상 정보 채우기 실패 (${e instanceof Error ? e.message : String(e)})`);
+    }
+  }
+  console.log(`영상 정보 채움 ${filled}개, 삭제·비공개로 확인되어 뺀 영상 ${removed}개`);
 }
 
 // 사용법: npm run collect                          (전체)
@@ -331,6 +404,7 @@ async function main(): Promise<void> {
   await saveMainChannels();
   await deleteExpiredVideos();
   await collectVideoLists();
+  await fillVideoDetails();
   await discoverOtherChannels(keywords);
   await collectTranscripts(limit);
 }

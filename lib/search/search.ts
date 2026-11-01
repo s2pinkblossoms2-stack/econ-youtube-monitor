@@ -37,9 +37,13 @@ export type SearchResultItem = {
 };
 
 export type SearchResponse = {
+  /** 24개 채널 영상 중 자막으로 확인한 결과 */
   main: SearchResultItem[];
+  /** 24개 채널 영상 중 자막을 받지 못해 확인불가인 영상. 제목·태그·설명에 키워드가 있어 언급 가능성이 높은 것만 */
+  unverified: SearchResultItem[];
   small: SearchResultItem[];
   totalMain: number;
+  totalUnverified: number;
   totalSmall: number;
   page: number;
   unchecked: { channelName: string; reason: string }[];
@@ -53,6 +57,7 @@ type VideoRow = {
   title: string;
   uploaded_at: string;
   is_short: boolean;
+  caption_status: "ok" | "none" | "pending";
   tags: string[];
   description: string | null;
   channels: { name: string; kind: "main" | "small"; active: boolean };
@@ -71,19 +76,24 @@ export async function searchMentions(
 
   // 최신 업로드 순. 같은 영상은 한 번만 나온다.
   videos.sort((a, b) => b.uploaded_at.localeCompare(a.uploaded_at));
-  const mainAll = videos.filter((video) => video.channels.kind === "main");
+  // 24개 채널 영상 중 자막을 확인하지 못한 영상은 "확인불가"로 따로 모은다. (자막으로 확인한 결과와 섞지 않는다)
+  const mainAll = videos.filter((video) => video.channels.kind === "main" && video.caption_status === "ok");
+  const unverifiedAll = videos.filter((video) => video.channels.kind === "main" && video.caption_status !== "ok");
   const smallAll = videos.filter((video) => video.channels.kind === "small");
 
   const from = (page - 1) * PAGE_SIZE;
   const mainPage = mainAll.slice(from, from + PAGE_SIZE);
+  const unverifiedPage = unverifiedAll.slice(from, from + PAGE_SIZE);
   const smallPage = smallAll.slice(from, from + PAGE_SIZE);
 
   const segmentsById = await loadSegments(db, [...mainPage, ...smallPage].map((video) => video.id));
 
   return {
     main: toItems(mainPage, segmentsById, keywords),
+    unverified: toItems(unverifiedPage, segmentsById, keywords),
     small: toItems(smallPage, segmentsById, keywords),
     totalMain: mainAll.length,
+    totalUnverified: unverifiedAll.length,
     totalSmall: smallAll.length,
     page,
     unchecked: await findUncheckedChannels(db),
@@ -161,7 +171,7 @@ async function loadVideos(db: SupabaseClient, ids: string[], cutoff: string): Pr
     chunks.map(async (part) => {
       const { data, error } = await db
         .from("videos")
-        .select("id, youtube_video_id, title, uploaded_at, is_short, tags, description, channels!inner(name, kind, active)")
+        .select("id, youtube_video_id, title, uploaded_at, is_short, caption_status, tags, description, channels!inner(name, kind, active)")
         .in("id", part)
         .gte("uploaded_at", cutoff)
         .eq("channels.active", true);

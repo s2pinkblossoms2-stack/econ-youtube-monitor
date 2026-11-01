@@ -105,17 +105,29 @@ export async function fetchVideoDetails(videoIds: string[]): Promise<DiscoveredV
       if (snippet.liveBroadcastContent === "upcoming") continue;
       videos.push({
         videoId: item.id,
-        title: snippet.title,
-        description: snippet.description ?? "",
-        tags: snippet.tags ?? [],
+        title: clean(snippet.title),
+        description: clean(snippet.description ?? ""),
+        tags: (snippet.tags ?? []).map(clean),
         channelId: snippet.channelId,
-        channelTitle: snippet.channelTitle ?? "",
+        channelTitle: clean(snippet.channelTitle ?? ""),
         publishedAt: snippet.publishedAt,
         isShort: parseDurationSeconds(item.contentDetails?.duration) <= SHORT_MAX_SECONDS,
       });
     }
   }
   return videos;
+}
+
+// 저장소(Postgres)는 널 문자(\u0000)와, 이모지의 반쪽만 남은 깨진 글자를 받지 못한다. 미리 뺀다.
+function clean(text: string): string {
+  return text
+    .replace(/\u0000/g, "")
+    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "");
+}
+
+/** 글을 max자까지 자른다. 이모지 중간에서 잘려 깨진 글자가 남지 않게 한다. */
+export function truncateText(text: string, max: number): string {
+  return clean(text.slice(0, max));
 }
 
 // "PT1H2M3S" → 3723. 알 수 없으면 쇼츠로 오해하지 않게 아주 큰 값을 돌려준다.

@@ -19,7 +19,9 @@ type PlaylistItemsResponse = {
 
 const PAGE_SIZE = 50;
 // 하루에 영상을 아주 많이 올리는 채널도 있어서 쪽을 넘겨 가며 가져오되, 끝없이 가지 않게 상한을 둔다.
-const MAX_PAGES = 10;
+const MAX_PAGES = 30;
+/** 한 채널에서 가져올 수 있는 영상 수의 상한. 이 수에 닿으면 2주치를 다 못 가져왔을 수 있다. */
+export const MAX_UPLOADS_PER_CHANNEL = PAGE_SIZE * MAX_PAGES;
 
 /**
  * 채널의 업로드를 최신순으로 가져온다. `since` 이후에 올라온 영상까지만 가져오고, 더 오래된 영상이 나오면 멈춘다.

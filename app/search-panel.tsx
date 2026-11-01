@@ -93,11 +93,14 @@ export function SearchPanel() {
 }
 
 function Results({ keywords, data, onPage }: { keywords: string[]; data: SearchResponse; onPage: (page: number) => void }) {
-  const rawPages = Math.max(1, Math.ceil(Math.max(data.totalMain, data.totalSmall) / PAGE_SIZE));
+  const rawPages = Math.max(
+    1,
+    Math.ceil(Math.max(data.totalMain, data.totalUnverified, data.totalSmall) / PAGE_SIZE),
+  );
   // 서버가 받는 쪽 수에는 상한이 있다. 넘는 결과는 보여줄 수 없으니 안내한다.
   const totalPages = Math.min(rawPages, MAX_PAGE);
   const truncated = rawPages > MAX_PAGE;
-  const nothing = data.totalMain === 0 && data.totalSmall === 0;
+  const nothing = data.totalMain === 0 && data.totalUnverified === 0 && data.totalSmall === 0;
 
   return (
     <div className="space-y-8">
@@ -116,6 +119,16 @@ function Results({ keywords, data, onPage }: { keywords: string[]; data: SearchR
       ) : (
         <>
           <Section title="24개 주요 채널" total={data.totalMain} items={data.main} keywords={keywords} empty="이 구역에는 언급한 영상이 없습니다." />
+          {data.totalUnverified > 0 && (
+            <Section
+              title="확인불가 · 언급 가능성 높음 (자막을 받지 못한 24개 채널 영상)"
+              total={data.totalUnverified}
+              items={data.unverified}
+              keywords={keywords}
+              empty="이 쪽에는 영상이 없습니다."
+              note="자막을 받지 못해 영상에서 한 말은 확인하지 못했습니다. 제목·태그·설명에 키워드가 있어 언급했을 가능성이 높은 영상이니, 링크로 직접 확인해 주세요."
+            />
+          )}
           <Section
             title="그 밖의 채널 (제목·태그·설명에서 찾음)"
             total={data.totalSmall}
