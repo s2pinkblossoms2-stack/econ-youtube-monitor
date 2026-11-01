@@ -1,36 +1,81 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 경제 유튜브 여론 모니터
 
-## Getting Started
+재정경제부 대변인실 유튜브 담당팀이 **경제 유튜브 영상에서 키워드가 언급된 구절을 찾아, 원본 영상 링크와 함께 한 화면에서 볼 수 있게** 해 주는 내부 도구입니다.
 
-First, run the development server:
+> 담당자가 영상을 일일이 시청하며 키워드 언급 여부를 확인하던 일(약 3시간)을, 키워드를 입력하고 결과를 확인하는 일로 줄이는 것이 목표입니다.
+> 이 앱은 언급한 영상과 구절을 모아 보여주는 데까지만 하고, **논조 분석이나 요약은 하지 않습니다.** 판단은 담당자가 원문을 읽고 합니다.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- 배포 주소: https://econ-youtube-monitor.vercel.app
+- 기획 문서: [PRD.md](PRD.md) (서비스 기획서) · [PLAN.md](PLAN.md) (개발 계획) · [DESIGN.md](DESIGN.md) (설계서)
+
+## 무엇을 해 주나요
+
+1. **키워드 검색**: 키워드를 쉼표로 여러 개(최대 30개) 입력하면, 최근 14일 안에 올라온 영상에서 하나라도 나온 곳을 모두 찾습니다. 띄어쓰기와 조사(금리를/금리가) 차이는 같은 언급으로 봅니다.
+2. **언급 구절 보기**: 키워드가 나온 시점의 앞뒤 15초 자막을 **원문 그대로** 보여 주고(영상당 최대 3곳, 나머지는 "외 N건"), 그 시점으로 바로 이동하는 링크를 붙입니다. 모든 결과에는 영상 링크가 있습니다.
+3. **세 구역으로 나눠 보여주기**
+   - **24개 주요 채널**: 자막 전체를 대조한 결과
+   - **확인불가 · 언급 가능성 높음**: 자막을 받지 못한 주요 채널 영상 중 제목·태그·설명에 키워드가 있는 영상
+   - **그 밖의 채널**: 유튜브 검색으로 찾은 다른 채널 영상 중 제목·태그·설명에 키워드가 있는 영상 (썸네일 함께 표시)
+4. **등록한 키워드 한 번에 검색**: 자주 쓰는 키워드를 등록해 두고 전체를 한 번에 검색합니다.
+5. **채널 관리**: 24개 주요 채널을 화면에서 추가하거나 끌 수 있습니다.
+
+채널 관리와 등록한 키워드 목록은 담당팀만 볼 수 있게 **팀 공용 비밀번호**로 보호되고, 검색 화면은 주소를 아는 사람이 쓸 수 있습니다.
+
+## 이렇게 동작합니다 (수집 분리형)
+
+```
+[담당자 PC] npm run collect ── 유튜브 공식 API·자막 가져오기 ──▶ [Supabase 저장소]
+                                                                    ▲
+[Vercel: Next.js 화면·검색 API] ───────── 저장된 자막·영상 정보만 읽음 ┘
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- 유튜브에 접속하는 일(영상 목록, 자막 수집)은 **담당자 PC의 수집 스크립트**만 합니다. 배포된 화면은 저장소만 읽으므로 서버에서 유튜브가 막히는 문제가 없습니다.
+- 이미 저장한 영상의 자막은 다시 가져오지 않고, 업로드 14일이 지난 영상과 자막은 자동으로 삭제합니다.
+- 처음 전체 수집은 약 1시간, 이후 하루치 수집은 5~10분 걸립니다.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 기술 스택
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS 4 · Supabase(Postgres) · Vercel 배포 · YouTube Data API
 
-## Learn More
+화면은 재정경제부 공식 홈페이지의 짜임과 색을 따랐습니다.
 
-To learn more about Next.js, take a look at the following resources:
+## 직접 실행하기
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm install
+cp .env.example .env     # 값은 직접 채웁니다 (아래 환경 변수 참고)
+npm run dev              # http://localhost:3000
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| 명령어 | 하는 일 |
+|---|---|
+| `npm run dev` | 개발 서버 |
+| `npm run build` / `npm run lint` | 배포용 빌드 / 코드 검사 |
+| `npm run collect` | 영상 목록·자막을 수집해 저장소에 저장 (담당자 PC에서 실행) |
+| `npm run collect -- --keywords 금리,환율` | 키워드를 등록하고 그 밖의 채널 영상까지 찾기 |
 
-## Deploy on Vercel
+환경 변수 (`.env`, 값은 저장소에 올리지 않습니다)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| 이름 | 쓰는 곳 |
+|---|---|
+| `SUPABASE_URL`, `SUPABASE_SECRET_KEY` | 화면·검색 API·수집 스크립트 (서버 전용) |
+| `ADMIN_PASSWORD` | 채널 관리와 등록한 키워드를 지키는 팀 공용 비밀번호 |
+| `YOUTUBE_API_KEY` | 수집 스크립트만 사용 (배포 환경에는 등록하지 않음) |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+데이터베이스 구조는 `supabase/migrations/`의 파일로 관리합니다.
+
+## 알려진 한계
+
+- 유튜브 자동 자막은 경제 용어를 잘못 받아 적을 수 있습니다(예: "금통위"→"금통이"). 그래서 언급 구절 옆에 "자동 자막 기준"을 표시하며, 중요한 내용은 원본 영상에서 확인해야 합니다.
+- 그 밖의 채널은 키워드당 유튜브 검색 상위 100개까지만 찾고, 영상 속 말로만 언급한 영상은 잡히지 않을 수 있습니다.
+- 결과는 최신 1,000건(50쪽)까지만 볼 수 있습니다.
+
+## 폴더 구조
+
+| 폴더 | 내용 |
+|---|---|
+| `app/` | 화면과 API (검색, 채널 관리, 키워드) |
+| `lib/` | 키워드 찾기·구절 만들기, 유튜브·저장소 접근, 입력 검사 |
+| `scripts/` | 수집 스크립트와 24개 채널 목록, 정확도 확인표 도구 |
+| `supabase/migrations/` | 데이터베이스 구조 변경 기록 |
+| `check/` | 정확도 확인표 (담당자가 직접 채워 정확도를 계산) |
