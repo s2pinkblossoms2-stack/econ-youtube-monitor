@@ -47,3 +47,6 @@ next-env.d.ts
 
 # Supabase CLI 임시 파일 (자동 생성, 커밋하지 않음)
 supabase/.temp/
+
+# 지울 파일을 옮겨 두는 폴더 (사용자가 직접 확인하고 삭제한다)
+/trash-can/

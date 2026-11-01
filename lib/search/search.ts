@@ -11,8 +11,6 @@ import { normalizeText } from "./normalize";
 import { PAGE_SIZE } from "./validate";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-// 요청 주소가 너무 길어지지 않게 한 번에 묻는 영상 수를 제한한다.
-const ID_CHUNK = 100;
 // 마지막 수집이 이 시간보다 오래됐으면 "확인하지 못한 채널"로 안내한다.
 const STALE_CHECK_MS = 2 * DAY_MS;
 
@@ -50,7 +48,7 @@ export type SearchResponse = {
 };
 
 type VideoRow = {
-  id: string;
+  id: number;
   youtube_video_id: string;
   title: string;
   uploaded_at: string;
@@ -69,27 +67,38 @@ export async function searchMentions(
 ): Promise<SearchResponse> {
   const cutoff = new Date(Date.now() - RETENTION_DAYS * DAY_MS).toISOString();
 
-  const matchedIds = await findMatchedVideoIds(db, keywords, cutoff);
-  const videos = await loadVideos(db, [...matchedIds], cutoff);
+  // 1) 키워드가 걸린 영상의 가벼운 목록(번호·업로드 시각·채널 종류·자막 상태)을 DB에서 한 번에 받는다.
+  const matches = await findMatchedVideos(db, keywords, cutoff);
 
   // 최신 업로드 순. 같은 영상은 한 번만 나온다.
-  videos.sort((a, b) => b.uploaded_at.localeCompare(a.uploaded_at));
+  matches.sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
   // 24개 채널 영상 중 자막을 확인하지 못한 영상은 "확인불가"로 따로 모은다. (자막으로 확인한 결과와 섞지 않는다)
-  const mainAll = videos.filter((video) => video.channels.kind === "main" && video.caption_status === "ok");
-  const unverifiedAll = videos.filter((video) => video.channels.kind === "main" && video.caption_status !== "ok");
-  const smallAll = videos.filter((video) => video.channels.kind === "small");
+  const mainAll = matches.filter((match) => match.kind === "main" && match.captionStatus === "ok");
+  const unverifiedAll = matches.filter((match) => match.kind === "main" && match.captionStatus !== "ok");
+  const smallAll = matches.filter((match) => match.kind === "small");
 
   const from = (page - 1) * PAGE_SIZE;
   const mainPage = mainAll.slice(from, from + PAGE_SIZE);
   const unverifiedPage = unverifiedAll.slice(from, from + PAGE_SIZE);
   const smallPage = smallAll.slice(from, from + PAGE_SIZE);
 
-  const segmentsById = await loadSegments(db, [...mainPage, ...smallPage].map((video) => video.id));
+  // 2) 화면에 보여줄 영상(최대 60개)의 자세한 정보와 자막 원본만 읽는다.
+  const shownIds = [...mainPage, ...unverifiedPage, ...smallPage].map((match) => match.id);
+  const [rows, segmentsById] = await Promise.all([
+    loadVideos(db, shownIds),
+    loadSegments(db, [...mainPage, ...smallPage].map((match) => match.id)),
+  ]);
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const pick = (part: MatchedVideo[]): VideoRow[] =>
+    part.flatMap((match) => {
+      const row = byId.get(match.id);
+      return row ? [row] : [];
+    });
 
   return {
-    main: toItems(mainPage, segmentsById, keywords),
-    unverified: toItems(unverifiedPage, segmentsById, keywords),
-    small: toItems(smallPage, segmentsById, keywords),
+    main: toItems(pick(mainPage), segmentsById, keywords),
+    unverified: toItems(pick(unverifiedPage), segmentsById, keywords),
+    small: toItems(pick(smallPage), segmentsById, keywords),
     totalMain: mainAll.length,
     totalUnverified: unverifiedAll.length,
     totalSmall: smallAll.length,
@@ -111,41 +120,40 @@ async function findPendingKeywords(db: SupabaseClient, keywords: string[]): Prom
   return keywords.filter((keyword) => !collected.has(normalizeText(keyword)));
 }
 
+type MatchedVideo = {
+  id: number;
+  uploadedAt: string;
+  kind: "main" | "small";
+  captionStatus: "ok" | "none" | "pending";
+};
+
 // 자막의 검색용 글, 또는 영상의 제목·태그·설명(meta_text)에 키워드(띄어쓰기를 뺀 글)가 들어 있는 영상을 모두 찾는다.
-// 키워드 중 하나라도 있으면 포함한다.
-// DB 함수(matching_video_ids)가 키워드마다 한 번의 조회로 영상 번호 전체를 배열 하나로 돌려준다.
-// 키워드는 글자 그대로 찾으므로 % _ 같은 문자를 따로 막을 필요가 없다. (supabase/migrations/20261102000100_matching_video_ids.sql)
-async function findMatchedVideoIds(db: SupabaseClient, keywords: string[], cutoff: string): Promise<Set<number>> {
-  const perKeyword = await Promise.all(
-    keywords.map(async (keyword) => {
-      const { data, error } = await db.rpc("matching_video_ids", { needle: normalizeText(keyword), since: cutoff });
-      if (error) throw new Error(`키워드 검색 실패: ${error.message}`);
-      return (data ?? []) as number[];
-    }),
+// 키워드 중 하나라도 있으면 포함한다. 14일 안에 올라온, 사용 중인 채널의 영상만 나온다.
+// DB 함수(matching_videos_any)가 키워드 전체를 한 번의 조회로 훑어 [번호, 업로드 시각, 채널 종류, 자막 상태]를 배열 하나로 돌려준다.
+// 키워드는 글자 그대로 찾으므로 % _ 같은 문자를 따로 막을 필요가 없다. (supabase/migrations/20261102000300_matching_videos_any.sql)
+async function findMatchedVideos(db: SupabaseClient, keywords: string[], cutoff: string): Promise<MatchedVideo[]> {
+  const needles = keywords.map(normalizeText).filter((needle) => needle.length > 0);
+  if (needles.length === 0) return [];
+  const { data, error } = await db.rpc("matching_videos_any", { needles, since: cutoff });
+  if (error) throw new Error(`키워드 검색 실패: ${error.message}`);
+  return ((data ?? []) as [number, string, "main" | "small", "ok" | "none" | "pending"][]).map(
+    ([id, uploadedAt, kind, captionStatus]) => ({ id, uploadedAt, kind, captionStatus }),
   );
-  return new Set(perKeyword.flat());
 }
 
-// 14일 안에 올라온 영상 중, 사용 중인 채널의 영상만 가져온다.
-async function loadVideos(db: SupabaseClient, ids: number[], cutoff: string): Promise<VideoRow[]> {
-  const chunks = chunk(ids, ID_CHUNK);
-  const results = await Promise.all(
-    chunks.map(async (part) => {
-      const { data, error } = await db
-        .from("videos")
-        .select("id, youtube_video_id, title, uploaded_at, is_short, caption_status, tags, description, channels!inner(name, kind, active)")
-        .in("id", part)
-        .gte("uploaded_at", cutoff)
-        .eq("channels.active", true);
-      if (error) throw new Error(`영상 읽기 실패: ${error.message}`);
-      return (data ?? []) as unknown as VideoRow[];
-    }),
-  );
-  return results.flat();
+// 보여줄 영상(최대 60개)의 자세한 정보를 한 번에 읽는다. 목록에서 이미 14일·사용 중 채널로 걸렀다.
+async function loadVideos(db: SupabaseClient, ids: number[]): Promise<VideoRow[]> {
+  if (ids.length === 0) return [];
+  const { data, error } = await db
+    .from("videos")
+    .select("id, youtube_video_id, title, uploaded_at, is_short, caption_status, tags, description, channels!inner(name, kind, active)")
+    .in("id", ids);
+  if (error) throw new Error(`영상 읽기 실패: ${error.message}`);
+  return (data ?? []) as unknown as VideoRow[];
 }
 
-async function loadSegments(db: SupabaseClient, videoIds: string[]): Promise<Map<string, TranscriptSegment[]>> {
-  const map = new Map<string, TranscriptSegment[]>();
+async function loadSegments(db: SupabaseClient, videoIds: number[]): Promise<Map<number, TranscriptSegment[]>> {
+  const map = new Map<number, TranscriptSegment[]>();
   // 한 쪽은 최대 40개 영상이다. 한 줄이 커서 한꺼번에 읽으면 느리므로 영상마다 따로, 동시에 읽는다.
   await Promise.all(
     videoIds.map(async (videoId) => {
@@ -161,7 +169,7 @@ async function loadSegments(db: SupabaseClient, videoIds: string[]): Promise<Map
 // 링크를 만들 수 없는 영상(잘못된 영상 ID)은 결과에서 뺀다.
 function toItems(
   videos: VideoRow[],
-  segmentsById: Map<string, TranscriptSegment[]>,
+  segmentsById: Map<number, TranscriptSegment[]>,
   keywords: string[],
 ): SearchResultItem[] {
   const items: SearchResultItem[] = [];
@@ -224,8 +232,3 @@ async function findUncheckedChannels(db: SupabaseClient): Promise<SearchResponse
     }));
 }
 
-function chunk<T>(items: T[], size: number): T[][] {
-  const result: T[][] = [];
-  for (let i = 0; i < items.length; i += size) result.push(items.slice(i, i + size));
-  return result;
-}

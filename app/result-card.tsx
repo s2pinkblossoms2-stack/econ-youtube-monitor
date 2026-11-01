@@ -1,17 +1,24 @@
 // 검색 결과 한 건(영상 하나). 모든 결과에는 영상 링크가, 모든 언급 구절에는 시점 링크가 붙는다.
+// 공식 홈페이지의 목록처럼 파란 테두리의 작은 분류 표시, 굵은 제목, 오른쪽의 날짜로 구성한다.
 
 import type { SearchResultItem } from "@/lib/search/search";
 import { formatSeconds, formatUploadedAt } from "./format";
 
-const linkClass = "underline decoration-foreground/30 underline-offset-2 hover:decoration-foreground";
+const linkClass = "underline decoration-gray-30 underline-offset-2 hover:decoration-primary-60 hover:text-primary-60";
+const tagClass = "rounded border border-gray-30 px-2 py-0.5 text-xs text-gray-70";
 
 export function ResultCard({ item, searchedKeywords }: { item: SearchResultItem; searchedKeywords: string[] }) {
   return (
-    <li className="rounded-lg border border-gray-20 bg-white p-4">
-      <p className="text-sm text-foreground/70">
-        {item.channelName} · {formatUploadedAt(item.uploadedAt)}
-      </p>
-      <h3 className="mt-1 text-base font-semibold leading-snug">
+    <li className="rounded-xl border border-gray-20 bg-white p-5">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="rounded border border-primary-50 px-2 py-0.5 text-xs font-medium text-primary-60">{item.channelName}</span>
+        {item.isShort && <span className={tagClass}>쇼츠</span>}
+        {item.matchType === "metadata" && <span className={tagClass}>{item.matchedIn.join("·")}에서 찾음</span>}
+        {item.captionStatus === "none" && <span className={tagClass}>자막 확인 안 함</span>}
+        <span className="ml-auto text-sm text-gray-50">{formatUploadedAt(item.uploadedAt)}</span>
+      </div>
+
+      <h3 className="mt-2 text-lg font-semibold leading-snug text-foreground">
         <a href={item.videoUrl} target="_blank" rel="noopener noreferrer" className={linkClass}>
           {item.videoTitle}
         </a>
@@ -19,19 +26,10 @@ export function ResultCard({ item, searchedKeywords }: { item: SearchResultItem;
 
       <div className="mt-2 flex flex-wrap gap-1.5">
         {item.matchedKeywords.map((keyword) => (
-          <span key={keyword} className="rounded-full bg-foreground/10 px-2 py-0.5 text-xs font-medium">
+          <span key={keyword} className="rounded-full bg-primary-5 px-2.5 py-0.5 text-xs font-medium text-primary-70">
             {keyword}
           </span>
         ))}
-        {item.isShort && <span className="rounded-full border border-foreground/30 px-2 py-0.5 text-xs">쇼츠</span>}
-        {item.matchType === "metadata" && (
-          <span className="rounded-full border border-foreground/30 px-2 py-0.5 text-xs">
-            {item.matchedIn.join("·")}에서 찾음
-          </span>
-        )}
-        {item.captionStatus === "none" && (
-          <span className="rounded-full border border-foreground/30 px-2 py-0.5 text-xs">자막 확인 안 함</span>
-        )}
       </div>
 
       {item.matchType === "metadata" && (
@@ -42,16 +40,16 @@ export function ResultCard({ item, searchedKeywords }: { item: SearchResultItem;
             src={item.thumbnailUrl}
             alt={`${item.videoTitle} 썸네일`}
             loading="lazy"
-            className="aspect-video w-full rounded-md border border-foreground/15 object-cover"
+            className="aspect-video w-full rounded-lg border border-gray-20 object-cover"
           />
         </a>
       )}
 
       <ul className="mt-3 space-y-3">
         {item.mentions.map((mention) => (
-          <li key={mention.seconds} className="rounded-md bg-foreground/5 p-3 text-sm leading-relaxed">
-            <p className="mb-1 flex flex-wrap items-center gap-2 text-xs text-foreground/70">
-              <a href={mention.url} target="_blank" rel="noopener noreferrer" className={`${linkClass} font-medium`}>
+          <li key={mention.seconds} className="rounded-lg bg-secondary-5 p-4 text-sm leading-relaxed text-gray-80">
+            <p className="mb-1.5 flex flex-wrap items-center gap-2 text-xs text-gray-50">
+              <a href={mention.url} target="_blank" rel="noopener noreferrer" className={`${linkClass} font-semibold text-primary-60`}>
                 ▶ {formatSeconds(mention.seconds)}부터 보기
               </a>
               <span>자동 자막 기준 · 오인식이 있을 수 있어요</span>
@@ -63,7 +61,7 @@ export function ResultCard({ item, searchedKeywords }: { item: SearchResultItem;
         ))}
       </ul>
       {item.moreMentions > 0 && (
-        <p className="mt-2 text-sm text-foreground/70">
+        <p className="mt-2 text-sm text-gray-70">
           외 {item.moreMentions}건 —{" "}
           <a href={item.videoUrl} target="_blank" rel="noopener noreferrer" className={linkClass}>
             영상에서 확인
@@ -83,7 +81,7 @@ function Highlight({ text, keywords }: { text: string; keywords: string[] }) {
     <>
       {parts.map((part, index) =>
         index % 2 === 1 ? (
-          <mark key={index} className="rounded bg-yellow-300/70 px-0.5 text-inherit dark:bg-yellow-400/40">
+          <mark key={index} className="rounded bg-yellow-200 px-0.5 text-inherit">
             {part}
           </mark>
         ) : (

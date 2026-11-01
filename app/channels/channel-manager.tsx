@@ -93,8 +93,8 @@ export function ChannelManager() {
 
   return (
     <div className="space-y-8">
-      <form onSubmit={onAdd} className="space-y-3 rounded-lg border border-foreground/15 p-4">
-        <h2 className="text-lg font-bold">채널 추가</h2>
+      <form onSubmit={onAdd} className="space-y-3 rounded-xl border border-gray-20 bg-white p-5">
+        <h2 className="border-l-4 border-primary-60 pl-3 text-xl font-bold text-primary-90">채널 추가</h2>
         <div>
           <label htmlFor="channel" className="mb-1 block text-sm font-medium">
             채널 ID 또는 채널 주소
@@ -104,10 +104,10 @@ export function ChannelManager() {
             value={channelInput}
             onChange={(event) => setChannelInput(event.target.value)}
             placeholder="UC로 시작하는 채널 ID, 또는 youtube.com/channel/UC… 주소"
-            className="w-full rounded-lg border border-foreground/30 bg-background px-3 py-2"
+            className="w-full rounded-lg border border-gray-30 bg-white px-3 py-2"
             maxLength={200}
           />
-          <p className="mt-1 text-xs text-foreground/70">@이름 형태의 주소는 쓸 수 없습니다. 채널 페이지의 &lsquo;정보&rsquo;에서 채널 ID를 복사하세요.</p>
+          <p className="mt-1 text-xs text-gray-70">@이름 형태의 주소는 쓸 수 없습니다. 채널 페이지의 &lsquo;정보&rsquo;에서 채널 ID를 복사하세요.</p>
         </div>
         <div>
           <label htmlFor="name" className="mb-1 block text-sm font-medium">
@@ -118,7 +118,7 @@ export function ChannelManager() {
             value={nameInput}
             onChange={(event) => setNameInput(event.target.value)}
             placeholder="결과에 표시될 이름"
-            className="w-full rounded-lg border border-foreground/30 bg-background px-3 py-2"
+            className="w-full rounded-lg border border-gray-30 bg-white px-3 py-2"
             maxLength={50}
           />
         </div>
@@ -145,20 +145,20 @@ export function ChannelManager() {
       </div>
 
       <section>
-        <h2 className="mb-3 text-lg font-bold">
-          주요 채널 <span className="font-normal text-foreground/70">· 사용 중 {activeCount}개 (최대 {maxActive}개)</span>
+        <h2 className="mb-3 border-l-4 border-primary-60 pl-3 text-xl font-bold text-primary-90">
+          주요 채널 <span className="font-normal text-gray-70">· 사용 중 {activeCount}개 (최대 {maxActive}개)</span>
         </h2>
         {channels === null ? (
-          <p className="text-foreground/70">불러오는 중…</p>
+          <p className="text-gray-70">불러오는 중…</p>
         ) : channels.length === 0 ? (
-          <p className="text-foreground/70">등록된 채널이 없습니다.</p>
+          <p className="text-gray-70">등록된 채널이 없습니다.</p>
         ) : (
-          <ul className="divide-y divide-foreground/15 rounded-lg border border-foreground/15">
+          <ul className="divide-y divide-gray-10 rounded-xl border border-gray-20 bg-white">
             {channels.map((channel) => (
               <li key={channel.id} className="flex items-center justify-between gap-3 p-3">
                 <div className="min-w-0">
-                  <p className={`truncate font-medium ${channel.active ? "" : "text-foreground/50 line-through"}`}>{channel.name}</p>
-                  <p className="truncate text-xs text-foreground/70">
+                  <p className={`truncate font-medium ${channel.active ? "" : "text-gray-50 line-through"}`}>{channel.name}</p>
+                  <p className="truncate text-xs text-gray-70">
                     {channel.youtube_channel_id} ·{" "}
                     {channel.last_checked_at ? `마지막 수집 ${formatUploadedAt(channel.last_checked_at)}` : "아직 수집 전"}
                   </p>
@@ -174,7 +174,7 @@ export function ChannelManager() {
                       channel.active ? `"${channel.name}"을(를) 껐습니다. 영상·자막은 남아 있고 검색에서만 빠집니다.` : `"${channel.name}"을(를) 켰습니다.`,
                     )
                   }
-                  className="shrink-0 rounded-lg border border-foreground/30 px-3 py-1.5 text-sm disabled:opacity-40"
+                  className="shrink-0 rounded-lg border border-gray-30 px-3 py-1.5 text-sm hover:border-primary-50 disabled:opacity-40"
                 >
                   {channel.active ? "끄기" : "켜기"}
                 </button>

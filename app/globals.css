@@ -3,7 +3,7 @@
 /* 색은 재정경제부 홈페이지(mofe.go.kr)의 색 체계를 따른다: 파랑(primary)·청회색(secondary)·회색(gray) */
 :root {
   color-scheme: light;
-  --background: #ffffff;
+  --background: #f4f7fb; /* 공식 홈페이지처럼 아주 연한 청회색 바탕 위에 흰 카드를 올린다 */
   --foreground: #1e2124;
 
   --primary-5: #ecf2fe;
@@ -22,11 +22,15 @@
   --secondary-20: #bacbde;
   --secondary-50: #346fb2;
   --secondary-70: #063a74;
+  --secondary-80: #052b57;
 
   --gray-5: #f4f5f6;
+  --gray-10: #e6e8ea;
   --gray-20: #cdd1d5;
+  --gray-30: #b1b8be;
   --gray-50: #6d7882;
   --gray-70: #464c53;
+  --gray-80: #33363d;
 }
 
 @theme inline {
@@ -47,75 +51,27 @@
   --color-secondary-20: var(--secondary-20);
   --color-secondary-50: var(--secondary-50);
   --color-secondary-70: var(--secondary-70);
+  --color-secondary-80: var(--secondary-80);
   --color-gray-5: var(--gray-5);
+  --color-gray-10: var(--gray-10);
   --color-gray-20: var(--gray-20);
+  --color-gray-30: var(--gray-30);
   --color-gray-50: var(--gray-50);
   --color-gray-70: var(--gray-70);
-  --font-sans: var(--font-inter), "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
+  --color-gray-80: var(--gray-80);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-inter), "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
+  /* 공식 홈페이지의 글꼴(Pretendard GOV)이 있으면 쓰고, 없으면 PC에 있는 한글 글꼴로 보인다 */
+  font-family: "Pretendard GOV", "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
   word-break: keep-all; /* 한글을 단어 단위로 줄바꿈 */
+  line-height: 1.6;
 }
 
 /* 키보드로 이동할 때 현재 위치가 보이게 한다 */
 :focus-visible {
   outline: 2px solid var(--primary-50);
   outline-offset: 2px;
-}
-
-/* 화면이 처음 나타날 때 아래에서 위로 떠오르는 효과. 요소는 처음에 inline으로 opacity: 0이고, 애니메이션이 보이게 채운다. */
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes fadeInOverlay {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes fadeInDialog {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.animate-fade-in-up {
-  animation: fadeInUp 0.6s ease-out forwards;
-}
-
-.animate-fade-in-overlay {
-  animation: fadeInOverlay 0.4s ease-out forwards;
-}
-
-.animate-slide-up-overlay {
-  animation: fadeInDialog 0.5s ease-out forwards;
-  transform: translate(-50%, -50%);
-}
-
-/* 움직임을 줄이도록 설정한 사용자에게는 효과 없이 바로 보여준다 */
-@media (prefers-reduced-motion: reduce) {
-  .animate-fade-in-up,
-  .animate-fade-in-overlay,
-  .animate-slide-up-overlay {
-    animation: none;
-    opacity: 1 !important;
-  }
 }

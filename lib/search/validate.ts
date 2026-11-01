@@ -1,11 +1,11 @@
 // Design Ref: §4.2, §7 — 검색 입력 검사. 사용자가 보낸 값은 믿지 않고 길이·개수·형식을 서버에서 확인한다. (보안 점검 SEC-005)
 
-export const MAX_KEYWORDS = 10;
+export const MAX_KEYWORDS = 30;
 export const MAX_KEYWORD_LENGTH = 50;
 export const MAX_PAGE = 50;
 export const PAGE_SIZE = 20;
 // 쉼표로 나누기 전의 전체 길이 상한 (아주 긴 값을 쪼개는 일부터 막는다)
-const MAX_RAW_LENGTH = 1000;
+const MAX_RAW_LENGTH = 2000;
 
 export type SearchInput = { keywords: string[]; page: number };
 
