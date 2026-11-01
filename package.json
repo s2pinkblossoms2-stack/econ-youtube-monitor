@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "collect": "tsx --env-file=.env scripts/collect.ts"
+    "collect": "tsx --env-file=.env scripts/collect.ts",
+    "check-sheet": "tsx --env-file=.env scripts/check-sheet.ts",
+    "check-accuracy": "tsx scripts/check-accuracy.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",

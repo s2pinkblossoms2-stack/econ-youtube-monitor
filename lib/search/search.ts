@@ -11,8 +11,6 @@ import { normalizeText } from "./normalize";
 import { PAGE_SIZE } from "./validate";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-// Supabase는 한 번에 1,000행까지만 주므로 쪽을 나눠 읽는다.
-const PAGE_ROWS = 1000;
 // 요청 주소가 너무 길어지지 않게 한 번에 묻는 영상 수를 제한한다.
 const ID_CHUNK = 100;
 // 마지막 수집이 이 시간보다 오래됐으면 "확인하지 못한 채널"로 안내한다.
@@ -115,57 +113,21 @@ async function findPendingKeywords(db: SupabaseClient, keywords: string[]): Prom
 
 // 자막의 검색용 글, 또는 영상의 제목·태그·설명(meta_text)에 키워드(띄어쓰기를 뺀 글)가 들어 있는 영상을 모두 찾는다.
 // 키워드 중 하나라도 있으면 포함한다.
-async function findMatchedVideoIds(db: SupabaseClient, keywords: string[], cutoff: string): Promise<Set<string>> {
+// DB 함수(matching_video_ids)가 키워드마다 한 번의 조회로 영상 번호 전체를 배열 하나로 돌려준다.
+// 키워드는 글자 그대로 찾으므로 % _ 같은 문자를 따로 막을 필요가 없다. (supabase/migrations/20261102000100_matching_video_ids.sql)
+async function findMatchedVideoIds(db: SupabaseClient, keywords: string[], cutoff: string): Promise<Set<number>> {
   const perKeyword = await Promise.all(
     keywords.map(async (keyword) => {
-      const pattern = `%${escapeLike(normalizeText(keyword))}%`;
-      const [inTranscripts, inMetadata] = await Promise.all([
-        readAllIds(async (from, to) => {
-          const { data, error } = await db
-            .from("transcripts")
-            .select("video_id")
-            .ilike("normalized_text", pattern)
-            .order("video_id")
-            .range(from, to);
-          if (error) throw new Error(`자막 검색 실패: ${error.message}`);
-          return ((data ?? []) as { video_id: string }[]).map((row) => row.video_id);
-        }),
-        readAllIds(async (from, to) => {
-          const { data, error } = await db
-            .from("videos")
-            .select("id")
-            .ilike("meta_text", pattern)
-            .gte("uploaded_at", cutoff)
-            .order("id")
-            .range(from, to);
-          if (error) throw new Error(`제목·태그·설명 검색 실패: ${error.message}`);
-          return ((data ?? []) as { id: string }[]).map((row) => row.id);
-        }),
-      ]);
-      return [...inTranscripts, ...inMetadata];
+      const { data, error } = await db.rpc("matching_video_ids", { needle: normalizeText(keyword), since: cutoff });
+      if (error) throw new Error(`키워드 검색 실패: ${error.message}`);
+      return (data ?? []) as number[];
     }),
   );
   return new Set(perKeyword.flat());
 }
 
-// 한 번에 1,000행까지만 주는 읽기를 끝까지 반복한다.
-async function readAllIds(readPage: (from: number, to: number) => Promise<string[]>): Promise<string[]> {
-  const ids: string[] = [];
-  for (let from = 0; ; from += PAGE_ROWS) {
-    const page = await readPage(from, from + PAGE_ROWS - 1);
-    ids.push(...page);
-    if (page.length < PAGE_ROWS) break;
-  }
-  return ids;
-}
-
-// LIKE에서 특별한 뜻을 가진 \ % _ 를 글자 그대로 찾도록 막는다. (% 하나로 모든 자막이 걸리는 일 방지)
-function escapeLike(text: string): string {
-  return text.replace(/[\\%_]/g, "\\$&");
-}
-
 // 14일 안에 올라온 영상 중, 사용 중인 채널의 영상만 가져온다.
-async function loadVideos(db: SupabaseClient, ids: string[], cutoff: string): Promise<VideoRow[]> {
+async function loadVideos(db: SupabaseClient, ids: number[], cutoff: string): Promise<VideoRow[]> {
   const chunks = chunk(ids, ID_CHUNK);
   const results = await Promise.all(
     chunks.map(async (part) => {
