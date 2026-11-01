@@ -86,7 +86,7 @@ PLAN.md에서 가져온 핵심 맥락이다. 구현할 때마다 이 표로 돌�
 |---|---|---|
 | `channels` | id, youtube_channel_id, name, kind(`main` 24개 / `small` 중소), subscriber_count, last_checked_at, active | 채널 목록. `last_checked_at`은 채널별로 마지막에 영상 목록을 확인한 시각이다. |
 | `videos` | id, youtube_video_id, channel_id, title, uploaded_at, is_short, caption_status(`ok` / `none` / `pending`), caption_checked_at | 영상 하나당 한 줄. |
-| `transcripts` | video_id, segments(JSON: `[{start_ms, text}]`), normalized_text | 자막 원문과 검색용 글(띄어쓰기를 뺀 글). 영상당 한 줄. |
+| `transcripts` | video_id, segments(JSON: `[{start, text}]`, start는 초 단위), normalized_text | 자막 원문과 검색용 글(띄어쓰기를 뺀 글). 영상당 한 줄. |
 | `keywords` | id, text, created_at, last_collected_at | 담당팀이 등록한 키워드. 수집 때 중소 유튜버 검색에 쓴다. |
 
 ### 3.2 관계
