@@ -2,12 +2,12 @@
 // 순서: 채널 저장 → 14일 지난 영상 삭제 → 채널별 새 영상 목록 저장 → 새 영상 자막 저장.
 
 import { getDb } from "../lib/db/client";
+import { RETENTION_DAYS } from "../lib/search/constants";
 import { normalizeText } from "../lib/search/normalize";
 import { fetchKoreanTranscript } from "../lib/youtube/transcript";
 import { fetchRecentUploads } from "../lib/youtube/uploads";
 import { MAIN_CHANNELS } from "./main-channels";
 
-const RETENTION_DAYS = 14;
 const DAY_MS = 24 * 60 * 60 * 1000;
 // 유튜브가 막지 않도록 영상 사이에 쉬는 시간을 둔다.
 const REQUEST_DELAY_MS = 600;
