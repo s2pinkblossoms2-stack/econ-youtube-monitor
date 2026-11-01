@@ -1,5 +1,5 @@
-// 채널 관리 화면(/channels)과 채널 API(/api/channels)만 팀 공용 비밀번호로 막는다. (보안 점검 SEC-001)
-// 검색 화면과 검색 API는 지금처럼 누구나 쓸 수 있다.
+// 채널 관리 화면(/channels), 채널 API(/api/channels), 키워드 API(/api/keywords)만 팀 공용 비밀번호로 막는다.
+// (보안 점검 SEC-001·003) 검색 화면과 검색 API는 지금처럼 누구나 쓸 수 있다.
 
 import { NextResponse, type NextRequest } from "next/server";
 import { isAuthorized, isSameOrigin } from "@/lib/admin/auth";
@@ -37,5 +37,5 @@ export function proxy(request: NextRequest): NextResponse {
 }
 
 export const config = {
-  matcher: ["/channels/:path*", "/api/channels/:path*"],
+  matcher: ["/channels/:path*", "/api/channels/:path*", "/api/keywords/:path*"],
 };

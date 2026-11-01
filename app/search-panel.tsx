@@ -6,6 +6,7 @@ import { useRef, useState, type FormEvent } from "react";
 import type { SearchResponse, SearchResultItem } from "@/lib/search/search";
 import { MAX_PAGE, PAGE_SIZE } from "@/lib/search/validate";
 import { ResultCard } from "./result-card";
+import { SavedKeywords } from "./saved-keywords";
 
 type SearchState =
   | { status: "idle" }
@@ -44,6 +45,13 @@ export function SearchPanel() {
     void run(input, 1);
   }
 
+  // 저장한 키워드를 눌렀을 때 검색창에 더한다. 이미 들어 있으면 다시 넣지 않는다.
+  function addToInput(keyword: string) {
+    const current = splitKeywords(input);
+    if (current.some((existing) => existing.toLowerCase() === keyword.toLowerCase())) return;
+    setInput([...current, keyword].join(", "));
+  }
+
   const loading = state.status === "loading";
 
   return (
@@ -72,6 +80,8 @@ export function SearchPanel() {
       <p className="mt-2 text-sm text-foreground/70">
         최근 14일 안에 올라온 영상의 자막에서 찾습니다. 키워드는 최대 10개까지, 하나라도 나오면 결과에 포함됩니다.
       </p>
+
+      <SavedKeywords input={input} onPick={addToInput} />
 
       <div aria-live="polite" className="mt-6">
         {state.status === "loading" && <p className="text-foreground/70">자막을 찾고 있습니다. 몇 초 걸릴 수 있어요.</p>}
