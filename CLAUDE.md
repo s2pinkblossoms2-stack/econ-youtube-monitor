@@ -11,7 +11,7 @@
 - 화면과 서버 쪽 코드(API)를 한 프로젝트에서 처리한다. 다른 프레임워크는 제안하지 않는다.
 - 배포는 Vercel.
 - 저장소는 Supabase(Postgres)로 정했다. 연결은 `lib/db/client.ts`의 `getDb()`를 쓰고, 접속 정보는 `.env`의 `SUPABASE_URL`, `SUPABASE_SECRET_KEY`(서버 전용)에 있다. 테이블 정의는 `supabase/migrations/`에 둔다.
-- 채널의 영상 목록은 공식 YouTube Data API로 가져온다. 키는 `.env`의 `YOUTUBE_API_KEY`(서버 전용)이고 `lib/youtube/uploads.ts`가 쓴다. 수집은 `npm run collect`로 실행하고, 24개 채널이 아닌 채널의 영상은 키워드를 등록하며 `npm run collect -- --keywords 금리,환율`로 찾는다(제목·태그·설명에서 찾음, 구독자 수 조건 없음).
+- 채널의 영상 목록은 공식 YouTube Data API로 가져온다. 키는 `.env`의 `YOUTUBE_API_KEY`(서버 전용)이고 `lib/youtube/uploads.ts`가 쓴다. 수집은 `npm run collect`로 실행하고, 24개 채널이 아닌 채널의 영상은 키워드를 등록하며 `npm run collect -- --keywords 금리,환율`로 찾는다(제목·태그·설명에서 후보를 찾고 그 영상의 자막을 받아 실제 언급을 확인, 구독자 수 조건 없음).
 - 자막은 `youtube-transcript` 같은 비공식 방식으로 가져올 수 있음을 시험했다. (PLAN.md "1번 시험 결과" 참고) 수집 스크립트 실행 도구는 PLAN 3번에서 정한다.
 
 - 채널 관리 화면(`/channels`)과 채널 API(`/api/channels`)는 `proxy.ts`에서 팀 공용 비밀번호(`.env`의 `ADMIN_PASSWORD`, 서버 전용)로 막는다. 비밀번호를 정해 두지 않으면 열리지 않는다. 검색 화면과 검색 API는 비밀번호 없이 쓴다.

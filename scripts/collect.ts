@@ -277,7 +277,6 @@ async function saveDiscoveredVideos(videos: DiscoveredVideo[]): Promise<number> 
     (channels ?? []).map((row: { id: string; youtube_channel_id: string }) => [row.youtube_channel_id, row.id]),
   );
 
-  const now = new Date().toISOString();
   const rows = videos.flatMap((video) => {
     const channelId = channelIdByYoutubeId.get(video.channelId);
     if (!channelId) return [];
@@ -291,8 +290,8 @@ async function saveDiscoveredVideos(videos: DiscoveredVideo[]): Promise<number> 
         tags: video.tags,
         description: truncateText(video.description, MAX_DESCRIPTION_LENGTH),
         meta_text: buildMetaText({ title: video.title, tags: video.tags, description: video.description }),
-        caption_status: "none",
-        caption_checked_at: now,
+        // 제목·태그·설명에서 찾은 영상도 자막을 받아 실제 언급을 확인한다. (뒤의 collectTranscripts가 처리)
+        caption_status: "pending",
       },
     ];
   });

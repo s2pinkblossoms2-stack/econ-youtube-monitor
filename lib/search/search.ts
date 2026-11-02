@@ -135,6 +135,8 @@ type MatchedVideo = {
   uploadedAt: string;
   kind: "main" | "small";
   captionStatus: "ok" | "none" | "pending";
+  /** 자막 글에서 키워드를 찾았는지 */
+  inTranscript: boolean;
 };
 
 // 자막의 검색용 글, 또는 영상의 제목·태그·설명(meta_text)에 키워드(띄어쓰기를 뺀 글)가 들어 있는 영상을 모두 찾는다.
@@ -146,8 +148,12 @@ async function findMatchedVideos(db: SupabaseClient, keywords: string[], cutoff:
   if (needles.length === 0) return [];
   const { data, error } = await db.rpc("matching_videos_any", { needles, since: cutoff });
   if (error) throw new Error(`키워드 검색 실패: ${error.message}`);
-  return ((data ?? []) as [number, string, "main" | "small", "ok" | "none" | "pending"][]).map(
-    ([id, uploadedAt, kind, captionStatus]) => ({ id, uploadedAt, kind, captionStatus }),
+  const rows = (data ?? []) as [number, string, "main" | "small", "ok" | "none" | "pending", boolean][];
+  return (
+    rows
+      .map(([id, uploadedAt, kind, captionStatus, inTranscript]) => ({ id, uploadedAt, kind, captionStatus, inTranscript }))
+      // 그 밖의 채널 영상은 자막을 읽었는데 키워드가 없으면 언급이 없는 것이므로 뺀다. (제목에만 있어도 영상 속 언급은 확인되지 않았다)
+      .filter((match) => !(match.kind === "small" && match.captionStatus === "ok" && !match.inTranscript))
   );
 }
 
