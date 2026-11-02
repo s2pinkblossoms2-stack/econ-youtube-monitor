@@ -9,7 +9,7 @@ const ITEMS = [
   { href: "/", label: "키워드 검색", match: (path: string) => path === "/" },
   { href: "/coverage", label: "수집 현황", match: (path: string) => path.startsWith("/coverage") },
   { href: "/channels", label: "채널 관리", match: (path: string) => path.startsWith("/channels") },
-  { href: "/#guide", label: "이용 안내", match: () => false },
+  { href: "/guide", label: "이용 안내", match: (path: string) => path.startsWith("/guide") },
 ];
 
 export function MainMenu() {
