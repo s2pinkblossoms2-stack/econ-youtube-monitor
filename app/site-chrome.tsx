@@ -17,7 +17,7 @@ export function SiteHeader() {
       {/* 로고와 서비스 이름 */}
       <div className="mx-auto flex max-w-[1280px] items-center justify-between gap-4 px-6 py-4">
         <Link href="/" className="flex items-center gap-4">
-          <Image src="/brand/mofe-logo.png" alt="재정경제부" width={181} height={47} className="h-9 w-auto" priority />
+          <Image src="/brand/mofe-logo.svg" alt="재정경제부" width={167} height={48} className="h-9 w-auto" priority />
           <span className="hidden h-6 w-px bg-gray-20 sm:block" aria-hidden="true" />
           <span className="hidden text-xl font-bold text-primary-90 sm:block">경제 유튜브 여론 모니터</span>
         </Link>
@@ -42,7 +42,7 @@ export function SiteFooter() {
     <footer className="mt-16 border-t border-gray-20 bg-white">
       <div className="mx-auto flex max-w-[1280px] flex-col gap-6 px-6 py-10 md:flex-row md:items-start md:justify-between">
         <div>
-          <Image src="/brand/mofe-logo.png" alt="재정경제부" width={181} height={47} className="mb-4 h-8 w-auto" />
+          <Image src="/brand/mofe-logo.svg" alt="재정경제부" width={167} height={48} className="mb-4 h-8 w-auto" />
           <p className="text-sm text-gray-70">재정경제부 대변인실 유튜브 담당팀 내부 도구</p>
           <p className="mt-1 text-sm text-gray-70">공개된 영상의 자막과 제목·태그·설명만 사용하며, 자막은 14일이 지나면 삭제합니다.</p>
         </div>
