@@ -9,7 +9,8 @@
     "lint": "eslint",
     "collect": "tsx --env-file=.env scripts/collect.ts",
     "check-sheet": "tsx --env-file=.env scripts/check-sheet.ts",
-    "check-accuracy": "tsx scripts/check-accuracy.ts"
+    "check-accuracy": "tsx scripts/check-accuracy.ts",
+    "prune-excluded": "tsx --env-file=.env scripts/prune-excluded.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",

@@ -1,4 +1,4 @@
-// GET /api/export?keywords=금리,환율&part=1 — 검색 결과를 txt 파일로 내려받는다. (300개 영상씩 나눈 묶음)
+// GET /api/export?keywords=금리,환율&part=1&section=all|main|unverified|small&format=txt|json — 검색 결과를 txt 파일로 내려받는다. (300개 영상씩 나눈 묶음)
 // 검색과 같은 규칙으로 입력을 검사하고, 파일에는 링크·제목·채널명·게시일·언급 시간대와 자막 원문 구절이 들어간다.
 
 import { getDb } from "@/lib/db/client";
@@ -16,8 +16,12 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   try {
-    const { keywords, part } = parsed.value;
-    const result = await exportMentions(getDb(), keywords, part);
+    const { keywords, part, section, format } = parsed.value;
+    const result = await exportMentions(getDb(), keywords, part, section);
+    // 브라우저가 묶음을 이어 붙여 한 파일로 만들 때 쓰는 형식. (파일 하나가 300개를 넘으면 서버 시간 제한에 걸려 나눠 받는다)
+    if (format === "json") {
+      return Response.json(result, { headers: { "Cache-Control": "no-store" } });
+    }
     const generatedAt = new Date();
     const text = formatExport(
       result.items.map((item) => ({ item })),

@@ -137,7 +137,7 @@ export function formatExport(entries: ExportEntry[], meta: ExportMeta): string {
 }
 
 /** 파일 이름에 쓸 수 없는 글자를 뺀 이름. 예: 언급결과_금리-환율_2026-11-02.txt */
-export function exportFileName(keywords: string[], generatedAt: Date, part?: number): string {
+export function exportFileName(keywords: string[], generatedAt: Date, part?: number, sectionLabel?: string): string {
   const label = keywords
     .slice(0, 3)
     .join("-")
@@ -145,5 +145,5 @@ export function exportFileName(keywords: string[], generatedAt: Date, part?: num
     .slice(0, 30);
   const more = keywords.length > 3 ? `외${keywords.length - 3}` : "";
   const date = formatKoreanDateTime(generatedAt).slice(0, 10);
-  return `언급결과_${label || "키워드"}${more}_${date}${part ? `_${part}` : ""}.txt`;
+  return `언급결과_${label || "키워드"}${more}${sectionLabel ? `_${sectionLabel}` : ""}_${date}${part ? `_${part}` : ""}.txt`;
 }
