@@ -139,6 +139,8 @@ export function SearchPanel() {
   );
 }
 
+type ResultTab = "main" | "unverified" | "small";
+
 function Results({
   keywords,
   data,
@@ -152,7 +154,10 @@ function Results({
   onManual: (videoId: string, result: ManualResult | null) => void;
   onPage: (page: number) => void;
 }) {
-  const rawPages = Math.max(1, Math.ceil(Math.max(data.totalMain, data.totalUnverified, data.totalSmall) / PAGE_SIZE));
+  // 세 구역을 탭으로 나눠 한 구역씩 보여준다. 처음에는 결과가 있는 첫 구역을 연다.
+  const [tab, setTab] = useState<ResultTab>(() => (data.totalMain > 0 ? "main" : data.totalUnverified > 0 ? "unverified" : data.totalSmall > 0 ? "small" : "main"));
+  const activeTotal = tab === "main" ? data.totalMain : tab === "unverified" ? data.totalUnverified : data.totalSmall;
+  const rawPages = Math.max(1, Math.ceil(activeTotal / PAGE_SIZE));
   // 서버가 받는 쪽 수에는 상한이 있다. 넘는 결과는 보여줄 수 없으니 안내한다.
   const totalPages = Math.min(rawPages, MAX_PAGE);
   const truncated = rawPages > MAX_PAGE;
@@ -182,27 +187,50 @@ function Results({
         </p>
       ) : (
         <>
-          <Section
-            title="24개 주요 채널"
-            total={data.totalMain}
-            items={data.main}
-            keywords={keywords}
-            empty="이 구역에는 언급한 영상이 없습니다."
-            manual={manual}
-            onManual={onManual}
-          />
-          {data.totalUnverified > 0 && (
+          <div role="tablist" aria-label="결과 구역" className="flex flex-wrap gap-2 border-b border-gray-20">
+            {(
+              [
+                { id: "main", label: "24개 주요 채널", total: data.totalMain },
+                { id: "unverified", label: "확인불가", total: data.totalUnverified },
+                { id: "small", label: "그 밖의 채널", total: data.totalSmall },
+              ] as const
+            ).map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                aria-selected={tab === item.id}
+                onClick={() => setTab(item.id)}
+                className={`-mb-px border-b-2 px-4 py-2 text-base font-semibold ${tab === item.id ? "border-primary-60 text-primary-60" : "border-transparent text-gray-50 hover:text-primary-60"}`}
+              >
+                {item.label} <span className="text-sm font-normal">{item.total}건</span>
+              </button>
+            ))}
+          </div>
+          {tab === "main" && (
+            <Section
+              title="24개 주요 채널"
+              total={data.totalMain}
+              items={data.main}
+              keywords={keywords}
+              empty="이 구역에는 언급한 영상이 없습니다."
+              manual={manual}
+              onManual={onManual}
+            />
+          )}
+          {tab === "unverified" && (
             <Section
               title="확인불가 · 언급 가능성 높음"
               total={data.totalUnverified}
               items={data.unverified}
               keywords={keywords}
-              empty="이 쪽에는 영상이 없습니다."
+              empty="자막을 받지 못한 영상 중 키워드가 걸린 영상이 없습니다."
               note="자막을 받지 못한 24개 채널 영상입니다. 영상에서 한 말은 확인하지 못했고, 제목·태그·설명에 키워드가 있어 언급했을 가능성이 높은 영상입니다. 링크로 직접 확인하시거나, 유튜브에서 스크립트를 복사해 아래 칸에 붙여넣으면 키워드를 찾아 드립니다."
               manual={manual}
               onManual={onManual}
             />
           )}
+          {tab === "small" && (
           <Section
             title="그 밖의 채널"
             total={data.totalSmall}
@@ -217,6 +245,7 @@ function Results({
             manual={manual}
             onManual={onManual}
           />
+          )}
           {truncated && (
             <p role="status" className="text-sm text-gray-70">
               결과가 많아 최신 {MAX_PAGE * PAGE_SIZE}건까지만 볼 수 있습니다. 키워드를 더 구체적으로 입력하면 줄어듭니다.
