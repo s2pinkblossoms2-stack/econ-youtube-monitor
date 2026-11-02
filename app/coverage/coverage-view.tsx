@@ -31,14 +31,49 @@ const STATUS_STYLE: Record<Status, string> = {
   pending: "border-gray-30 text-gray-70",
 };
 
+type Kind = "main" | "small";
+
+const TABS: { kind: Kind; label: string }[] = [
+  { kind: "main", label: "24개 주요 채널" },
+  { kind: "small", label: "그 밖의 채널" },
+];
+
 export function CoverageView() {
+  const [kind, setKind] = useState<Kind>("main");
+  return (
+    <div className="space-y-6">
+      <div role="tablist" aria-label="채널 구분" className="flex gap-2 border-b border-gray-20">
+        {TABS.map((tab) => (
+          <button
+            key={tab.kind}
+            type="button"
+            role="tab"
+            aria-selected={kind === tab.kind}
+            onClick={() => setKind(tab.kind)}
+            className={`-mb-px border-b-2 px-4 py-2 text-base font-semibold ${kind === tab.kind ? "border-primary-60 text-primary-60" : "border-transparent text-gray-50 hover:text-primary-60"}`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+      {kind === "small" && (
+        <p className="text-sm text-gray-70">
+          유튜브 검색으로 모은 영상의 채널입니다. 최근 14일 영상이 있는 채널만 나오며, 수집(<code>npm run collect</code>) 때 자막을 받아 확인합니다.
+        </p>
+      )}
+      <CoverageList key={kind} kind={kind} />
+    </div>
+  );
+}
+
+function CoverageList({ kind }: { kind: Kind }) {
   const [channels, setChannels] = useState<Channel[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [onlyProblems, setOnlyProblems] = useState(false);
 
   useEffect(() => {
     let alive = true;
-    fetch("/api/coverage")
+    fetch(`/api/coverage?kind=${kind}`)
       .then(async (response) => ({ ok: response.ok, body: (await response.json().catch(() => null)) as { channels?: Channel[]; error?: string } | null }))
       .then(({ ok, body }) => {
         if (!alive) return;
@@ -51,7 +86,7 @@ export function CoverageView() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [kind]);
 
   if (error) {
     return (
@@ -91,7 +126,7 @@ export function CoverageView() {
 
       <ul className="space-y-3">
         {shown.map((channel) => (
-          <ChannelRow key={channel.id} channel={channel} />
+          <ChannelRow key={channel.id} channel={channel} showChecked={kind === "main"} />
         ))}
         {shown.length === 0 && <li className="rounded-xl border border-gray-20 bg-white p-5 text-gray-70">해당하는 채널이 없습니다.</li>}
       </ul>
@@ -99,7 +134,7 @@ export function CoverageView() {
   );
 }
 
-function ChannelRow({ channel }: { channel: Channel }) {
+function ChannelRow({ channel, showChecked }: { channel: Channel; showChecked: boolean }) {
   const [open, setOpen] = useState(false);
   const [videos, setVideos] = useState<Video[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -141,9 +176,11 @@ function ChannelRow({ channel }: { channel: Channel }) {
           확인불가 {channel.none}
         </span>
         {channel.pending > 0 && <span className="rounded border border-gray-30 px-2 py-0.5 text-xs text-gray-70">대기 {channel.pending}</span>}
-        <span className="w-full text-xs text-gray-50 sm:w-auto">
-          {channel.lastCheckedAt ? `마지막 수집 ${formatUploadedAt(channel.lastCheckedAt)}` : "아직 수집 전"}
-        </span>
+        {showChecked && (
+          <span className="w-full text-xs text-gray-50 sm:w-auto">
+            {channel.lastCheckedAt ? `마지막 수집 ${formatUploadedAt(channel.lastCheckedAt)}` : "아직 수집 전"}
+          </span>
+        )}
       </button>
 
       {open && (

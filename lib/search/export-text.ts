@@ -23,7 +23,7 @@ export type ExportMeta = {
 const SECTION_TITLE: Record<SearchResultItem["section"], string> = {
   main: "24개 주요 채널 · 자막에서 찾음",
   unverified: "확인불가 · 언급 가능성 높음 (자막을 받지 못한 24개 채널 영상)",
-  small: "그 밖의 채널 · 제목·태그·설명에서 찾음",
+  small: "그 밖의 채널 · 유튜브 검색으로 모은 영상 (자막을 받은 영상은 자막에서 찾음)",
 };
 
 const seoulDate = new Intl.DateTimeFormat("ko-KR", {

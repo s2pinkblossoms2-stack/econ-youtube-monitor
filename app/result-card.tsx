@@ -28,7 +28,7 @@ export function ResultCard({
         <span className="rounded border border-primary-50 px-2 py-0.5 text-xs font-medium text-primary-60">{item.channelName}</span>
         {item.isShort && <span className={tagClass}>쇼츠</span>}
         {item.matchType === "metadata" && <span className={tagClass}>{item.matchedIn.join("·")}에서 찾음</span>}
-        {item.captionStatus === "none" && <span className={tagClass}>자막 확인 안 함</span>}
+        {item.captionStatus === "none" && <span className={tagClass}>자막 확인불가</span>}
         <span className="ml-auto text-sm text-gray-50">{formatUploadedAt(item.uploadedAt)}</span>
       </div>
 
