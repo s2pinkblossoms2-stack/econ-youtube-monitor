@@ -11,6 +11,8 @@ export type DiscoveredVideo = {
   /** 업로드 시각 (ISO 문자열) */
   publishedAt: string;
   isShort: boolean;
+  /** 유튜브 영상 분류 번호 (25 = 뉴스/정치) */
+  categoryId: string | null;
 };
 
 type ApiError = { error?: { message?: string; errors?: { reason?: string }[] } };
@@ -31,6 +33,7 @@ type VideosResponse = ApiError & {
       channelTitle?: string;
       publishedAt?: string;
       liveBroadcastContent?: string;
+      categoryId?: string;
     };
     contentDetails?: { duration?: string };
   }[];
@@ -112,6 +115,7 @@ export async function fetchVideoDetails(videoIds: string[]): Promise<DiscoveredV
         channelTitle: clean(snippet.channelTitle ?? ""),
         publishedAt: snippet.publishedAt,
         isShort: parseDurationSeconds(item.contentDetails?.duration) <= SHORT_MAX_SECONDS,
+        categoryId: snippet.categoryId ?? null,
       });
     }
   }

@@ -12,6 +12,7 @@ import {
   truncateText,
   type DiscoveredVideo,
 } from "../lib/youtube/discover";
+import { isExcludedOtherVideo } from "../lib/youtube/exclude";
 import { fetchKoreanTranscript } from "../lib/youtube/transcript";
 import { fetchRecentUploads, MAX_UPLOADS_PER_CHANNEL } from "../lib/youtube/uploads";
 import { MAIN_CHANNELS } from "./main-channels";
@@ -220,10 +221,11 @@ async function discoverOtherChannels(newKeywords: string[]): Promise<void> {
       const existing = await findStoredVideoIds(foundIds);
       const details = await fetchVideoDetails(foundIds.filter((id) => !existing.has(id)));
 
-      // 키워드가 제목·태그·설명에 실제로 있고, 24개 채널이 아니며, 14일 안에 올라온 영상만 남긴다.
+      // 키워드가 제목·태그·설명에 실제로 있고, 24개 채널이 아니며, 방송국·뉴스 영상이 아니고, 14일 안에 올라온 영상만 남긴다.
       const keep = details.filter(
         (video) =>
           !mainChannelIds.has(video.channelId) &&
+          !isExcludedOtherVideo(video) &&
           new Date(video.publishedAt) >= since &&
           findMetadataMatch(video, [keyword.text]) !== null,
       );

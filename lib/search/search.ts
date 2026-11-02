@@ -8,7 +8,7 @@ import { buildVideoMentions, type Excerpt } from "./excerpts";
 import { thumbnailUrl, videoUrl } from "./links";
 import { findMetadataMatch } from "./metadata";
 import { normalizeText } from "./normalize";
-import { EXPORT_PART_SIZE, PAGE_SIZE } from "./validate";
+import { EXPORT_PART_SIZE, PAGE_SIZE, type ExportSection } from "./validate";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 // 마지막 수집이 이 시간보다 오래됐으면 "확인하지 못한 채널"로 안내한다.
@@ -203,7 +203,12 @@ export type ExportResult = {
  * 검색 결과 전체를 300개씩 나눈 `part`번째 묶음을 만든다. 순서는 화면과 같다:
  * 24개 주요 채널(자막 확인) → 확인불가 → 그 밖의 채널, 각각 최신 업로드 순.
  */
-export async function exportMentions(db: SupabaseClient, keywords: string[], part: number): Promise<ExportResult> {
+export async function exportMentions(
+  db: SupabaseClient,
+  keywords: string[],
+  part: number,
+  section: ExportSection = "all",
+): Promise<ExportResult> {
   const cutoff = new Date(Date.now() - RETENTION_DAYS * DAY_MS).toISOString();
   const matches = await findMatchedVideos(db, keywords, cutoff);
   matches.sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
@@ -211,7 +216,12 @@ export async function exportMentions(db: SupabaseClient, keywords: string[], par
   const unverifiedAll = matches.filter((match) => match.kind === "main" && match.captionStatus !== "ok");
   const smallAll = matches.filter((match) => match.kind === "small");
 
-  const ordered = [...mainAll, ...unverifiedAll, ...smallAll];
+  // 구역을 골랐으면 그 구역만, 아니면 세 구역을 차례로 (각 구역 안은 최신 게시 순)
+  const ordered = [
+    ...(section === "all" || section === "main" ? mainAll : []),
+    ...(section === "all" || section === "unverified" ? unverifiedAll : []),
+    ...(section === "all" || section === "small" ? smallAll : []),
+  ];
   const partCount = Math.max(1, Math.ceil(ordered.length / EXPORT_PART_SIZE));
   const slice = ordered.slice((part - 1) * EXPORT_PART_SIZE, part * EXPORT_PART_SIZE);
 

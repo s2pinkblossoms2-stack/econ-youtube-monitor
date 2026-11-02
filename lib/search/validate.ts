@@ -48,7 +48,11 @@ export function parseSearchParams(params: URLSearchParams): ParseResult {
 /** 내려받기 묶음 번호의 상한. 300개씩이라 최대 6,000건까지 받을 수 있다. */
 export const MAX_EXPORT_PART = 20;
 
-export type ExportInput = { keywords: string[]; part: number };
+/** 내려받을 구역. all은 세 구역 전부 */
+export type ExportSection = "all" | "main" | "unverified" | "small";
+const EXPORT_SECTIONS: ExportSection[] = ["all", "main", "unverified", "small"];
+
+export type ExportInput = { keywords: string[]; part: number; section: ExportSection; format: "txt" | "json" };
 export type ExportParseResult = { ok: true; value: ExportInput } | { ok: false; message: string };
 
 /** `?keywords=금리,환율&part=1`을 검사한다. 키워드 규칙은 검색과 같다. */
@@ -65,7 +69,11 @@ export function parseExportParams(params: URLSearchParams): ExportParseResult {
     part = Number(partRaw);
     if (part < 1 || part > MAX_EXPORT_PART) return { ok: false, message: `묶음 번호는 1~${MAX_EXPORT_PART}이어야 합니다.` };
   }
-  return { ok: true, value: { keywords: parsed.value.keywords, part } };
+  const sectionRaw = params.get("section") ?? "all";
+  if (!EXPORT_SECTIONS.includes(sectionRaw as ExportSection)) return { ok: false, message: "구역 값이 올바르지 않습니다." };
+  const formatRaw = params.get("format") ?? "txt";
+  if (formatRaw !== "txt" && formatRaw !== "json") return { ok: false, message: "형식 값이 올바르지 않습니다." };
+  return { ok: true, value: { keywords: parsed.value.keywords, part, section: sectionRaw as ExportSection, format: formatRaw } };
 }
 
 function fail(message: string): ParseResult {
