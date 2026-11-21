@@ -202,7 +202,7 @@ async function collectTranscripts(limit: number | undefined): Promise<void> {
 
 // 키워드마다 유튜브를 검색해, 24개 채널이 아닌 채널의 영상 중 제목·태그·설명에 키워드가 있는 영상을 저장한다. (PLAN 9번)
 // 새 영상만 저장하고, 저장된 영상은 다시 가져오지 않는다. 검색은 키워드당 최대 200단위(하루 한도 10,000)를 쓴다.
-async function discoverOtherChannels(newKeywords: string[]): Promise<void> {
+async function discoverOtherChannels(newKeywords: string[], quick: boolean): Promise<void> {
   const db = getDb();
 
   if (newKeywords.length > 0) {
@@ -212,9 +212,15 @@ async function discoverOtherChannels(newKeywords: string[]): Promise<void> {
     if (error) throw new Error(`키워드 저장 실패: ${error.message}`);
   }
 
-  const { data: keywordRows, error: keywordError } = await db.from("keywords").select("id, text");
+  const { data: keywordRows, error: keywordError } = await db.from("keywords").select("id, text, last_collected_at");
   if (keywordError) throw new Error(`키워드 읽기 실패: ${keywordError.message}`);
-  const keywords = (keywordRows ?? []) as { id: string; text: string }[];
+  const allKeywords = (keywordRows ?? []) as { id: string; text: string; last_collected_at: string | null }[];
+  // 빠른 모드: 아직 유튜브 검색을 거치지 않은 새 키워드만 검색한다. (검색은 키워드당 200단위라 모든 키워드를 자주 돌리면 하루 한도가 찬다)
+  const keywords = quick ? allKeywords.filter((keyword) => !keyword.last_collected_at) : allKeywords;
+  if (quick && keywords.length === 0) {
+    console.log("\n새 키워드가 없어 그 밖의 채널 검색은 건너뜁니다. (빠른 모드)");
+    return;
+  }
   if (keywords.length === 0) {
     console.log("\n등록된 키워드가 없어 그 밖의 채널 검색은 건너뜁니다. (--keywords 금리,환율 로 등록)");
     return;
@@ -387,7 +393,8 @@ async function fillVideoDetails(): Promise<void> {
 // 사용법: npm run collect                          (전체)
 //         npm run collect -- --limit 20            (자막은 20개까지만, 시험용)
 //         npm run collect -- --keywords 금리,환율   (키워드를 등록하고 그 밖의 채널 검색까지)
-type CollectOptions = { limit: number | undefined; keywords: string[] };
+//         npm run collect -- --quick               (빠른 모드: 새 키워드만 유튜브 검색. 자주 돌리는 자동 수집용)
+type CollectOptions = { limit: number | undefined; keywords: string[]; quick: boolean };
 
 function readOptions(): CollectOptions {
   const valueOf = (flag: string): string | undefined => {
@@ -410,16 +417,16 @@ function readOptions(): CollectOptions {
   if (keywords.some((keyword) => keyword.length > MAX_KEYWORD_LENGTH)) {
     throw new Error(`키워드는 ${MAX_KEYWORD_LENGTH}자까지 적을 수 있습니다.`);
   }
-  return { limit, keywords };
+  return { limit, keywords, quick: process.argv.includes("--quick") };
 }
 
 async function main(): Promise<void> {
-  const { limit, keywords } = readOptions();
+  const { limit, keywords, quick } = readOptions();
   await saveMainChannels();
   await deleteExpiredVideos();
   await collectVideoLists();
   await fillVideoDetails();
-  await discoverOtherChannels(keywords);
+  await discoverOtherChannels(keywords, quick);
   await collectTranscripts(limit);
 }
 
