@@ -97,11 +97,24 @@ async function collectVideoLists(): Promise<void> {
 }
 
 // 업로드 14일이 지난 영상을 지운다. transcripts는 videos를 따라 함께 지워진다. (PRD: 14일 지난 자막 삭제)
+// 자막 원본이 커서 한 번에 많이 지우면 저장소의 8초 제한에 걸리므로, 번호를 먼저 읽어 DELETE_BATCH개씩 나눠 지운다.
+// (오래 수집하지 않으면 지울 영상이 수천 개로 쌓인다)
+const DELETE_BATCH = 25;
+
 async function deleteExpiredVideos(): Promise<void> {
+  const db = getDb();
   const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
-  const { data, error } = await getDb().from("videos").delete().lt("uploaded_at", cutoff).select("id");
-  if (error) throw new Error(`오래된 영상 삭제 실패: ${error.message}`);
-  console.log(`14일이 지나 삭제한 영상: ${data?.length ?? 0}개`);
+  let deleted = 0;
+  for (;;) {
+    const { data: ids, error: readError } = await db.from("videos").select("id").lt("uploaded_at", cutoff).limit(DELETE_BATCH);
+    if (readError) throw new Error(`오래된 영상 읽기 실패: ${readError.message}`);
+    if (!ids || ids.length === 0) break;
+    const { error } = await db.from("videos").delete().in("id", ids.map((row: { id: string }) => row.id));
+    if (error) throw new Error(`오래된 영상 삭제 실패: ${error.message}`);
+    deleted += ids.length;
+    if (deleted % 500 === 0) console.log(`  삭제 진행 ${deleted}개`);
+  }
+  console.log(`14일이 지나 삭제한 영상: ${deleted}개`);
 }
 
 type VideoToCheck = { id: string; youtube_video_id: string };
